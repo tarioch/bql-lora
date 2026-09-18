@@ -1,0 +1,2 @@
+beancount>=3.0
+beanquery @ git+https://github.com/beancount/beanquery.git

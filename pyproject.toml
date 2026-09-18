@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools >= 77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bql-lora"
+version = "0.1.0"
+description = "Training data generator for fine-tuning LLMs on the Beancount Query Language (beanquery, Beancount v3)"
+requires-python = ">=3.10"
+dependencies = [
+    "beancount >= 3.0",
+    "beanquery @ git+https://github.com/beancount/beanquery.git",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
