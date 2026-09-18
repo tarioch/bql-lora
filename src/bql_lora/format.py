@@ -21,12 +21,12 @@ def assistant_message(rng: random.Random, sample: Sample) -> str:
     return f"{code}\n\n{sample.explanation}"
 
 
-def build_example(rng: random.Random, ledger: Ledger, sample: Sample) -> dict:
+def build_example(rng: random.Random, ledger: Ledger, sample: Sample, mode: str = "full") -> dict:
     return {
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt(ledger, sample.question)},
+            {"role": "user", "content": user_prompt(ledger, sample.question, mode)},
             {"role": "assistant", "content": assistant_message(rng, sample)},
         ],
-        "meta": {"intent": sample.intent, "bql": sample.bql},
+        "meta": {"task": "text2bql", "intent": sample.intent, "schema": mode, "bql": sample.bql},
     }

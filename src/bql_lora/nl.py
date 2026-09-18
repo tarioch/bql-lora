@@ -167,4 +167,6 @@ def split_camel(word: str) -> str:
 
 def natural_name(account: str) -> str:
     leaf = account.split(":")[-1]
+    if leaf.isupper():  # a ticker or currency code such as NESN or GBP keeps its case
+        return leaf
     return split_camel(leaf).replace("-", " ").lower()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import random
+import re
 from dataclasses import dataclass
 from typing import Callable
 
@@ -81,6 +82,26 @@ class Gen:
             return natural_name(account)
         return account
 
+    def keyword_for(self, account: str) -> str | None:
+        """A regex keyword (the account's leaf name) that matches this account and no other opened account."""
+        leaf = account.split(":")[-1]
+        if [a for a in self.led.accounts if re.search(leaf, a)] == [account]:
+            return leaf
+        return None
+
+    def acct_pair(self, account: str) -> tuple[str, str, str]:
+        """(English reference, BQL condition, regexp) for one account; the three always agree.
+
+        Without a schema in the prompt the model cannot know full account names, so half the time the question uses
+        a natural alias ("groceries") and the BQL a keyword regexp (``account ~ 'Groceries'``) that matches this
+        account only. That works whatever the ledger's account hierarchy looks like.
+        """
+        if self.mode == "none" and self.rng.random() < 0.5:
+            kw = self.keyword_for(account)
+            if kw:
+                return natural_name(account), f"account ~ {q(kw)}", kw
+        return self.acct_ref(account), f"account = {q(account)}", account
+
     def ym(self) -> tuple[int, int]:
         return self.rng.choice(self._months)
 
@@ -125,8 +146,8 @@ class Gen:
         kind = rng.choice(kinds)
         if kind == "exact":
             a = rng.choice(accs)
-            ref = self.acct_ref(a)
-            return Sel(f"account = {q(a)}", ref, a, root, [a])
+            ref, c, _ = self.acct_pair(a)
+            return Sel(c, ref, a, root, [a])
         if kind == "root" or (kind == "prefix" and not any(len(a.split(":")) > 2 for a in accs)):
             word = {"Expenses": ["all expenses", "all my expense accounts", "the Expenses accounts"], "Income": ["all income", "all income accounts"],
                     "Assets": ["all assets", "all asset accounts"], "Liabilities": ["all liabilities", "all liability accounts"], "Equity": ["equity accounts"]}[root]
@@ -148,6 +169,9 @@ class Gen:
         two = rng.sample(accs, k=min(2, len(accs)))
         if len(two) < 2:
             raise Skip
+        kws = [self.keyword_for(a) for a in two]
+        if self.mode == "none" and all(kws) and rng.random() < 0.5:
+            return Sel(f"account ~ {q('|'.join(kws))}", f"{natural_name(two[0])} and {natural_name(two[1])}", f"{two[0]} and {two[1]}", root, two)
         if rng.random() < 0.5:
             c = f"account IN ({q(two[0])}, {q(two[1])})"
         else:
@@ -248,7 +272,7 @@ def agg_report(g: Gen) -> Sample:
 
     # measure
     negate = root == "Income"
-    mkind = rng.choices(["inv", "num", "conv", "cost"], weights=[45, 30, 15, 10 if root == "Assets" else 0])[0]
+    mkind = rng.choices(["inv", "num", "conv", "cost"], weights=[45, 0 if g.mode == "none" else 30, 15, 10 if root == "Assets" else 0])[0]
     if mkind == "num" and not g.single_currency(where, frm):
         mkind = "inv"
     if mkind == "cost" and root != "Assets":
@@ -313,7 +337,7 @@ def agg_report(g: Gen) -> Sample:
             what = pick(rng, [f"the {top} categories by {noun}", f"the {limit} biggest {noun} categories"])
         if root in ("Income",):
             what = what.replace("highest", "highest")
-        question = g.ask(f"What are {what} for {sel.nl}{per_s}?", f"Show {what}, considering {sel.nl}{per_s}.", f"List {what} for {sel.nl}{per_s}")
+        question = g.ask(f"What are {what} for {sel.nl}{per_s}{tail}?", f"Show {what}, considering {sel.nl}{per_s}{tail}.", f"List {what} for {sel.nl}{per_s}{tail}")
     else:
         subject = {"Expenses": f"{noun} on {sel.nl}", "Income": f"{noun} from {sel.nl}", "Assets": f"{noun} of {sel.nl}", "Liabilities": f"{noun} on {sel.nl}"}[root]
         if sel.nl.startswith(("all ", "everything", "the ", "accounts")):
@@ -343,34 +367,36 @@ def balance_of_account(g: Gen) -> Sample:
     if not accs:
         raise Skip
     a = rng.choice(accs)
-    ref = g.acct_ref(a)
+    ref, acond, apat = g.acct_pair(a)
     when = None
     if rng.random() < 0.5:
         when = g.date_in_span(30)
     style = rng.choice(["sum", "sum", "balances", "journal_last"])
     if style == "sum":
-        where = [f"account = {q(a)}"] + ([f"date <= {when}"] if when else [])
-        bql = select("sum(position)", where=where) if rng.random() < 0.7 else select("sum(position) AS balance", where=where)
-        if rng.random() < 0.3:
+        where = [acond] + ([f"date <= {when}"] if when else [])
+        conv = rng.random() < 0.3
+        tail = f" in {g.base}" if conv else ""
+        asof = f" as of {when}" if when else ""
+        if conv:
             bql = select(f"convert(sum(position), '{g.base}')", where=where)
-        question = g.ask(f"What is the balance of {ref}{' as of ' + str(when) if when else ''}?",
-                         f"How much is in {ref}{' as of ' + str(when) if when else ''}?",
-                         f"Balance of {ref}{' on ' + str(when) if when else ''}",
-                         f"What was the balance of {ref} at the end of {when}?" if when else f"Current balance of {ref}?")
+        else:
+            bql = select("sum(position)" if rng.random() < 0.7 else "sum(position) AS balance", where=where)
+        question = g.ask(f"What is the balance of {ref}{asof}{tail}?",
+                         f"How much is in {ref}{asof}{tail}?",
+                         f"Balance of {ref}{asof}{tail}",
+                         f"What was the balance of {ref} at the end of {when}{tail}?" if when else f"Current balance of {ref}{tail}?")
         expl = f"Adds up all postings to {a}{' up to and including ' + str(when) if when else ''}."
     elif style == "balances":
-        w = [f"account = {q(a)}"] if rng.random() < 0.5 else []
+        w = [acond] if (rng.random() < 0.5 or apat != a) else [f"account ~ '^{a}'"]
         frm = f"CLOSE ON {when}" if when else None
-        if not w:
-            w = [f"account ~ '^{a}'"]
         bql = "BALANCES" + (f" FROM {frm}" if frm else "") + f" WHERE {cond(w)}"
         question = g.ask(f"Show the balance for {ref}{' before ' + str(when) if when else ''} using the BALANCES statement",
                          f"BALANCES of {ref}{' before ' + str(when) if when else ''}")
         expl = f"BALANCES prints one line per account with its summed inventory{'; CLOSE ON truncates the ledger at ' + str(when) + ' (entries on that date are excluded)' if when else ''}."
     else:
-        bql = f"JOURNAL {q(a)}"
+        bql = f"JOURNAL {q(apat)}"
         n = rng.choice([None, None, 10, 5])
-        bql = select("date, narration, position, balance", where=[f"account = {q(a)}"], order=["date DESC"], limit=n) if n else bql
+        bql = select("date, narration, position, balance", where=[acond], order=["date DESC"], limit=n) if n else bql
         question = g.ask(f"Show the register of {ref}" + (f", last {n} entries" if n else ""), f"Give me the journal for {ref}" + (f" (most recent {n} only)" if n else ""),
                          f"List all postings to {ref} with a running balance" if not n else f"Show the {n} most recent postings on {ref} with the running balance")
         expl = "Lists postings for the account together with the running balance column." + (" Sorted newest first and limited." if n else "")
@@ -419,10 +445,14 @@ def net_worth(g: Gen) -> Sample:
     rng = g.rng
     when = g.date_in_span(30) if rng.random() < 0.5 else None
     where = ["account ~ '^(Assets|Liabilities)'"] + ([f"date <= {when}"] if when else [])
-    fn = rng.choice(["convert(sum(position), '{c}')", "value(sum(position))", "convert(sum(position), '{c}')"]).format(c=g.base)
-    bql = select(fn, where=where)
-    question = g.ask(f"What is my net worth{' as of ' + str(when) if when else ''}?", f"Compute total assets minus liabilities{' as of ' + str(when) if when else ''} in {g.base}",
-                     f"How much am I worth{' on ' + str(when) if when else ' now'}?", f"Net worth{' at ' + str(when) if when else ''}")
+    asof = f" as of {when}" if when else ""
+    if rng.random() < 0.3:
+        bql = select("value(sum(position))", where=where)
+        question = g.ask(f"What is my net worth{asof} at market value?", f"Total assets minus liabilities{asof}, valued at current market prices")
+    else:
+        bql = select(f"convert(sum(position), '{g.base}')", where=where)
+        question = g.ask(f"What is my net worth{asof} in {g.base}?", f"Compute total assets minus liabilities{asof} in {g.base}",
+                         f"How much am I worth{asof if when else ' now'} in {g.base}?", f"Net worth{asof} in {g.base}")
     return Sample("net_worth", question, bql, "Sums all Assets and Liabilities postings (liabilities are negative) and converts the inventory to a single currency.")
 
 
@@ -430,11 +460,11 @@ def net_worth(g: Gen) -> Sample:
 def net_worth_by_month(g: Gen) -> Sample:
     rng = g.rng
     y = rng.choice(g._years)
-    bql = select(["year", "month", f"convert(last(balance), '{g.base}')"], where=["account ~ '^(Assets|Liabilities)'", f"year = {y}"], group="year, month") if False else None
     acct = rng.choice([a for a in g.accounts_of("Assets") if "Checking" in a or "Savings" in a] or g.accounts_of("Assets"))
-    bql = select(["year", "month", "last(balance) AS end_balance"], where=[f"account = {q(acct)}", f"year = {y}"], group="year, month", order=["year", "month"])
-    question = g.ask(f"What was the month-end balance of {g.acct_ref(acct)} for each month of {y}?", f"Show the closing balance of {g.acct_ref(acct)} per month in {y}",
-                     f"End-of-month balances for {g.acct_ref(acct)}, {y}")
+    ref, acond, _ = g.acct_pair(acct)
+    bql = select(["year", "month", "last(balance) AS end_balance"], where=[acond, f"year = {y}"], group="year, month", order=["year", "month"])
+    question = g.ask(f"What was the month-end balance of {ref} for each month of {y}?", f"Show the closing balance of {ref} per month in {y}",
+                     f"End-of-month balances for {ref}, {y}")
     return Sample("net_worth_by_month", question, bql, "The balance column is a running total per posting; taking last() per month yields the month-end balance.")
 
 
@@ -447,11 +477,13 @@ def top_expenses(g: Gen) -> Sample:
     sel = g.selector("Expenses", allow_multi=False)
     period = g.period() if rng.random() < 0.7 else None
     n = rng.choice([1, 3, 5, 10, 10, 20])
-    frm, where = g.use_from(period.form(rng), [sel.cond, f"currency = '{g.base}'"] if rng.random() < 0.4 else [sel.cond]) if period else (None, [sel.cond])
+    curf = rng.random() < 0.4
+    base_where = [sel.cond] + ([f"currency = '{g.base}'"] if curf else [])
+    frm, where = g.use_from(period.form(rng), base_where) if period else (None, base_where)
     cols = rng.choice([["date", "payee", "narration", "position"], ["date", "payee", "narration", "account", "number"], ["date", "description", "position"]])
     bql = select(cols, frm=frm, where=where, order=["number DESC"], limit=n)
     per = f" {period.phrase(rng)}" if period else ""
-    what = "expense" if n == 1 else f"{n} biggest expenses"
+    per += f" (only {g.base} postings)" if curf else ""
     question = g.ask(f"What was my largest expense on {sel.nl}{per}?" if n == 1 else f"Show the {n} largest expenses on {sel.nl}{per}",
                      f"List the top {n} purchases for {sel.nl}{per}" if n > 1 else f"Find the single most expensive purchase for {sel.nl}{per}",
                      f"Which are the {n} most expensive things I bought ({sel.nl}){per}?" if n > 1 else f"Biggest expense on {sel.nl}{per}?")
@@ -469,8 +501,9 @@ def recent_transactions(g: Gen) -> Sample:
         expl = "The #transactions table has one row per transaction (not per posting), sorted by date descending."
     elif variant == "postings":
         a = rng.choice(g.used)
-        bql = select(["date", "narration", "position"], where=[f"account = {q(a)}"], order=["date DESC"], limit=n)
-        question = g.ask(f"Show the latest {n} postings on {g.acct_ref(a)}", f"Last {n} entries in {g.acct_ref(a)}", f"What are the {n} most recent movements of {g.acct_ref(a)}?")
+        ref, acond, _ = g.acct_pair(a)
+        bql = select(["date", "narration", "position"], where=[acond], order=["date DESC"], limit=n)
+        question = g.ask(f"Show the latest {n} postings on {ref}", f"Last {n} entries in {ref}", f"What are the {n} most recent movements of {ref}?")
         expl = "Filters postings to one account and sorts newest first."
     else:
         p = g.payee()
@@ -895,13 +928,13 @@ def gains_dividends(g: Gen) -> Sample:
         if not accs:
             raise Skip
         y = rng.choice(g._years)
-        bql = select("neg(sum(position))", where=["account ~ '^Income:Dividends'", f"year = {y}"])
+        bql = select("neg(sum(position))", where=["account ~ 'Dividends'", f"year = {y}"])
         question = g.ask(f"How much dividend income did I receive in {y}?", f"Total dividends {y}")
         expl = "Income is negative in Beancount, so neg() flips the sign."
     else:
-        bql = select(["year", "neg(sum(position)) AS realized_gains"], where=["account ~ 'Capital-Gains'"], group="year", order=["year"])
+        bql = select(["year", "neg(sum(position)) AS realized_gains"], where=["account ~ 'Gains'"], group="year", order=["year"])
         question = g.ask("What were my realized capital gains per year?", "Show realized gains by year")
-        expl = "Realized gains post to the Capital-Gains income account (negative = gain)."
+        expl = "Realized gains post to an Income gains account such as Income:Capital-Gains (negative = gain)."
     return Sample("gains_dividends", question, bql, expl)
 
 
@@ -912,13 +945,12 @@ def gains_dividends(g: Gen) -> Sample:
 def average_per_month(g: Gen) -> Sample:
     rng = g.rng
     sel = g.selector("Expenses", allow_multi=False)
-    if not g.single_currency([sel.cond]):
-        raise Skip
     fn = rng.choice(["avg", "max", "min"])
     period = g.period(["year", "range", "since"]) if rng.random() < 0.5 else None
-    frm, where = g.use_from(period.form(rng), [sel.cond]) if period else (None, [sel.cond])
+    base_where = [sel.cond, f"currency = '{g.base}'"]
+    frm, where = g.use_from(period.form(rng), base_where) if period else (None, base_where)
     inner = select(["year", "month", "sum(number) AS total"], frm=frm, where=where, group="year, month", multiline=False)
-    per = f" {period.phrase(rng)}" if period else ""
+    per = (f" {period.phrase(rng)}" if period else "") + f" in {g.base}"
     if fn == "avg":
         bql = select("sum(total) / count(total) AS monthly_average", frm=f"({inner})", multiline=len(inner) > 70)
         question = g.ask(f"What is my average monthly spending on {sel.nl}{per}?", f"Average per month for {sel.nl}{per}", f"On average, how much do I spend on {sel.nl} each month{per}?")
@@ -985,12 +1017,12 @@ def income_vs_expense(g: Gen) -> Sample:
         expl = "Groups both root types by month; income shows up negative."
     elif variant == "net":
         bql = select(["year", "-sum(number) AS net_saved"], where=["account ~ '^(Income|Expenses)'", f"currency = '{g.base}'"], group="year", order=["year"])
-        question = g.ask("How much did I save each year (income minus expenses)?", "Yearly savings: income less expenses")
+        question = g.ask(f"How much did I save each year (income minus expenses) in {g.base}?", f"Yearly savings in {g.base}: income less expenses")
         expl = "Because income is negative and expenses positive, the negated sum of both is what was saved."
     elif variant == "year":
         y = rng.choice(g._years)
         bql = select(["root(account, 1) AS type", f"convert(sum(position), '{g.base}')"], where=["account ~ '^(Income|Expenses)'", f"year = {y}"], group="type", order=["type"])
-        question = g.ask(f"Give me total income and total expenses for {y} in {g.base}", f"Income statement totals for {y}")
+        question = g.ask(f"Give me total income and total expenses for {y} in {g.base}", f"Income statement totals for {y} in {g.base}")
         expl = "One row per root type, converted to the reporting currency."
     else:
         d1 = dt.date(rng.choice(g._years), 1, 1)
@@ -1008,7 +1040,7 @@ def having_filter(g: Gen) -> Sample:
     if variant == "acct":
         thr = rng.choice([100, 250, 500, 1000, 2000])
         bql = select(["account", "sum(number) AS total"], where=["account ~ '^Expenses'", f"currency = '{g.base}'"], group="account", having=f"sum(number) > {thr}", order=["total DESC"])
-        question = g.ask(f"Which expense accounts have a total above {thr} {g.base}?", f"Show expense accounts where the sum exceeds {thr}", f"List expense accounts with more than {thr} {g.base} spent in total")
+        question = g.ask(f"Which expense accounts have a total above {thr} {g.base}?", f"Show expense accounts where the sum exceeds {thr} {g.base}", f"List expense accounts with more than {thr} {g.base} spent in total")
         expl = "HAVING filters groups after aggregation and must contain an aggregate expression."
     elif variant == "payee":
         thr = rng.choice([2, 3, 5, 10])
@@ -1099,17 +1131,17 @@ def subscriptions(g: Gen) -> Sample:
     accs = [a for a in g.used if "Subscription" in a]
     if not accs:
         raise Skip
-    a = accs[0]
+    sub = "account ~ 'Subscriptions'"
     variant = rng.choice(["by_payee", "monthly", "list"])
     if variant == "by_payee":
-        bql = select(["payee", "sum(number) AS total"], where=[f"account = {q(a)}"], group="payee", order=["total DESC"])
-        question = g.ask("How much do I spend on each subscription in total?", f"Total per subscription payee ({g.acct_ref(a)})")
+        bql = select(["payee", "sum(number) AS total"], where=[sub], group="payee", order=["total DESC"])
+        question = g.ask("How much do I spend on each subscription in total?", "Total per subscription payee")
     elif variant == "monthly":
-        bql = select(["payee", "max(number) AS monthly_cost"], where=[f"account = {q(a)}"], group="payee", order=["payee"])
+        bql = select(["payee", "max(number) AS monthly_cost"], where=[sub], group="payee", order=["payee"])
         question = g.ask("What is the monthly price of each of my subscriptions?", "List my subscriptions and their monthly cost")
     else:
-        bql = select(["DISTINCT payee"] if False else "payee", where=[f"account = {q(a)}"], group="payee", order=["payee"])
-        question = g.ask("Which subscriptions do I have?", f"List the services I pay for under {g.acct_ref(a)}")
+        bql = select("payee", where=[sub], group="payee", order=["payee"])
+        question = g.ask("Which subscriptions do I have?", "List the services I pay for as subscriptions")
     return Sample("subscriptions", question, bql, "Groups postings of the subscriptions account by payee.")
 
 
@@ -1123,8 +1155,9 @@ def first_last(g: Gen) -> Sample:
         expl = "min() and max() work on dates."
     elif variant == "acct":
         a = rng.choice(g.used)
-        bql = select(["min(date) AS first", "max(date) AS last", "count(*) AS n"], where=[f"account = {q(a)}"])
-        question = g.ask(f"When was {g.acct_ref(a)} first and last used, and how many postings does it have?", f"First and last posting date for {g.acct_ref(a)}")
+        ref, acond, _ = g.acct_pair(a)
+        bql = select(["min(date) AS first", "max(date) AS last", "count(*) AS n"], where=[acond])
+        question = g.ask(f"When was {ref} first and last used, and how many postings does it have?", f"First and last posting date for {ref}")
         expl = "Aggregates over the postings of one account."
     elif variant == "payee_first":
         p = g.payee()
@@ -1132,7 +1165,7 @@ def first_last(g: Gen) -> Sample:
         question = g.ask(f"When did I first and last transact with {p}?", f"First and most recent date for {p}")
         expl = "min/max of the date over that payee's transactions."
     else:
-        bql = select(["date", "sum(number) AS total"], where=["account ~ '^Expenses'", f"currency = '{g.base}'"], group="date", order=["total DESC"], limit=1)
+        bql = select(["date", "sum(number) AS total"], where=["account ~ '^Expenses'"], group="date", order=["total DESC"], limit=1)
         question = g.ask("On which single day did I spend the most?", "What was my most expensive day?")
         expl = "Groups expense postings by date and keeps the top day."
     return Sample("first_last", question, bql, expl)
@@ -1270,20 +1303,21 @@ def open_close_clear(g: Gen) -> Sample:
 def journal_statement(g: Gen) -> Sample:
     rng = g.rng
     a = rng.choice(g.used)
+    ref, _, apat = g.acct_pair(a)
     variant = rng.choice(["plain", "cost", "units", "period", "regex"])
     if variant == "plain":
-        bql = f"JOURNAL {q(a)}"
-        question = g.ask(f"Show the journal for {g.acct_ref(a)}", f"JOURNAL of {a}")
+        bql = f"JOURNAL {q(apat)}"
+        question = g.ask(f"Show the journal for {ref}", f"JOURNAL of {ref}")
     elif variant == "cost":
-        bql = f"JOURNAL {q(a)} AT cost"
-        question = g.ask(f"Show the journal of {g.acct_ref(a)} with amounts at cost", f"Register for {a} valued at cost")
+        bql = f"JOURNAL {q(apat)} AT cost"
+        question = g.ask(f"Show the journal of {ref} with amounts at cost", f"Register for {ref} valued at cost")
     elif variant == "units":
-        bql = f"JOURNAL {q(a)} AT units"
-        question = g.ask(f"Journal for {g.acct_ref(a)} showing only units without cost", f"Show {a} register in units")
+        bql = f"JOURNAL {q(apat)} AT units"
+        question = g.ask(f"Journal for {ref} showing only units without cost", f"Show {ref} register in units")
     elif variant == "period":
         y = rng.choice(g._years)
-        bql = f"JOURNAL {q(a)} FROM year = {y}"
-        question = g.ask(f"Show the journal for {g.acct_ref(a)} in {y}", f"Register of {a} for the year {y}")
+        bql = f"JOURNAL {q(apat)} FROM year = {y}"
+        question = g.ask(f"Show the journal for {ref} in {y}", f"Register of {ref} for the year {y}")
     else:
         root = a.split(":")[0]
         bql = f"JOURNAL {q('^' + root)}" if False else f"JOURNAL {q(':'.join(a.split(':')[:2]))}"
@@ -1331,14 +1365,14 @@ def string_functions(g: Gen) -> Sample:
         bql = select(["date", "grep('[0-9]+', narration) AS number_in_text"], frm="#transactions", where=["grep('[0-9]+', narration) IS NOT NULL"], order=["date"])
         question = g.ask("Extract the first number that appears in each narration", "Pull out digits from narrations where present")
     elif variant == "leaf":
-        bql = select(["leaf(account) AS name", "sum(number) AS total"], where=["account ~ '^Expenses'", f"currency = '{g.base}'"], group="name", order=["total DESC"])
+        bql = select(["leaf(account) AS name", "sum(number) AS total"], where=["account ~ '^Expenses'"], group="name", order=["total DESC"])
         question = g.ask("Total expenses by the last part of the account name", "Group expense totals by leaf account name, biggest first")
     elif variant == "root":
         n = rng.choice([1, 2])
         bql = select([f"root(account, {n}) AS root", "count(*) AS postings"], group="root", order=["root"])
         question = g.ask(f"Count postings by the first {n} component{'s' if n > 1 else ''} of the account name", f"How many postings per {n}-level account prefix?")
     elif variant == "parent":
-        bql = select(["parent(account) AS parent", "sum(number) AS total"], where=["account ~ '^Expenses'", f"currency = '{g.base}'"], group="parent", order=["total DESC"])
+        bql = select(["parent(account) AS parent", "sum(number) AS total"], where=["account ~ '^Expenses'"], group="parent", order=["total DESC"])
         question = g.ask("Sum expenses by parent account", "Expense totals grouped by the parent of each account")
     elif variant == "splitcomp":
         bql = select(["splitcomp(account, ':', 1) AS second_level", "count(*) AS n"], group="second_level", order=["n DESC"])
@@ -1355,16 +1389,14 @@ def subquery_in(g: Gen) -> Sample:
     variant = rng.choice(["above_avg", "nested", "distinct_count"])
     if variant == "above_avg":
         sel = g.selector("Expenses", allow_multi=False)
-        if not g.single_currency([sel.cond]):
-            raise Skip
-        inner = select(["year", "month", "sum(number) AS total"], where=[sel.cond], group="year, month", multiline=False)
+        inner = select(["year", "month", "sum(number) AS total"], where=[sel.cond, f"currency = '{g.base}'"], group="year, month", multiline=False)
         bql = select(["year", "month", "total"], frm=f"({inner})", where=["total > 100"], order=["total DESC"], limit=5, multiline=True)
-        question = g.ask(f"Which months had more than 100 in spending on {sel.nl}? Show the top 5 using a subquery", f"Top 5 months above 100 for {sel.nl} (use a nested select)")
+        question = g.ask(f"Which months had more than 100 {g.base} in spending on {sel.nl}? Show the top 5 using a subquery", f"Top 5 months above 100 {g.base} for {sel.nl} (use a nested select)")
         expl = "A subquery in FROM lets you filter or re-aggregate grouped results."
     elif variant == "nested":
         inner = select(["account", "sum(number) AS total"], where=["account ~ '^Expenses'", f"currency = '{g.base}'"], group="account", multiline=False)
         bql = select(["count(*) AS accounts", "max(total) AS highest"], frm=f"({inner})", multiline=len(inner) > 60)
-        question = g.ask("How many expense accounts are there and what is the highest total among them?", "Count expense accounts and find the largest account total")
+        question = g.ask(f"How many expense accounts are there and what is the highest total among them, in {g.base}?", f"Count expense accounts and find the largest account total in {g.base}")
         expl = "The inner query totals each account; the outer query aggregates those totals."
     else:
         bql = select("count(*) AS payees", frm="(SELECT DISTINCT payee)")

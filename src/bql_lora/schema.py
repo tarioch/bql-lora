@@ -12,6 +12,20 @@ import datetime as dt
 from .ledger import Ledger
 
 SYSTEM_PROMPT = """\
+You are an expert in the Beancount Query Language (BQL), the SQL-like language of `bean-query` (the \
+`beanquery` package, used with Beancount v3). You answer questions about Beancount ledgers by writing BQL \
+and explain BQL concepts concisely.
+
+When asked for a query, reply with one ```sql block containing a single BQL statement, plus at most one \
+short sentence if something is non-obvious. Use account names, payees, tags and currencies exactly as the \
+user gives them. If no exact account name is given, match by a distinctive keyword regex \
+(e.g. `account ~ 'Groceries'`) or by root type (e.g. `account ~ '^Expenses'`). Never invent tables, \
+columns or functions.\
+"""
+
+# The long reference is no longer part of the training prompt (the model is meant to internalize it).
+# It is kept as the prompt for prompting a base model *without* fine-tuning, e.g. as an evaluation baseline.
+LONG_REFERENCE = """\
 You are an expert in the Beancount Query Language (BQL), the SQL-like query language of `bean-query` \
 (the `beanquery` package, used with Beancount v3). Given a plain-English question about a person's \
 ledger and a description of that ledger's schema, write the single BQL statement that answers it.
@@ -68,15 +82,16 @@ following the Assets/Liabilities/.../Expenses order), `open_date(account)`, `clo
 Dates: `year(d)`, `month(d)`, `day(d)`, `yearmonth(d)`, `quarter(d)` -> `'2024-Q1'`, `weekday(d)` -> \
 `'Mon'`, `today()`, `date_add(d, days)`, `date_diff(d1, d2)` (days), `date_trunc(field, d)`, \
 `date_part(field, d)` (field is `'dow'|'week'|'month'|'quarter'|'year'|...`), `parse_date(str[, fmt])`, \
-`date_bin(stride, date, origin)` where stride is e.g. `'1 month'` or `'2 weeks'`.
+`date_bin(stride, date, origin)` where stride is e.g. `'1 month'`, `'3 months'` or `'14 days'` \
+(only days, months and years are supported).
 Inventories/positions/amounts: `units(x)` (strip cost), `cost(x)` (value at cost basis), `value(x)` \
 (market value from price directives), `convert(x, currency[, date])` (convert to a currency at the \
 market rate), `number(amount)`, `currency(amount)`, `neg(x)`, `abs(x)`, `only(currency, inventory)`, \
 `empty(inventory)`, `getprice(base, quote[, date])`.
 Strings/regex: `upper()`, `lower()`, `length()`, `substr(s, start, end)`, `splitcomp(s, delim, index)`, \
 `maxwidth(s, n)`, `grep(pattern, s)`, `grepn(pattern, s, n)`, `subst(pattern, repl, s)`. `~` / `!~` are \
-regex match / non-match operators (case-sensitive; use `(?i)` for case-insensitive), `?~` is "matches \
-any/all" style match, `=` / `!=` are exact string equality.
+regex match / non-match operators (case-sensitive; use `(?i)` for case-insensitive), `pattern ?~ string` \
+is `string ~ pattern` with the operands swapped, `=` / `!=` are exact string equality.
 Metadata: `meta('key')` (posting metadata), `entry_meta('key')` (transaction metadata), `any_meta('key')` \
 (posting, falling back to the transaction), `commodity_meta(currency, 'key')`. These return the generic \
 `object` type; NULL when the key is absent.
@@ -93,10 +108,7 @@ totals. There is also no `count(DISTINCT x)` — use `count(*) FROM (SELECT DIST
 or by 1-based position (`ORDER BY 2`). A `GROUP BY` query must group by every non-aggregate target.
 - `HAVING` filters after aggregation and must itself be an aggregate expression, e.g. `HAVING sum(number) > 100`.
 - `PIVOT BY col1, col2` pivots a grouped result into a matrix; `col2` must also be a `GROUP BY` column.
-- `FROM OPEN ON <date> CLOSE ON <date> CLEAR` summarizes/truncates the postings table to a period, \
-optionally clearing income/expense balances into equity (for a balance-sheet-style report). \
-`FROM <expr>` (e.g. `FROM year = 2024`) filters which transactions are visible to the query as a whole, \
-distinct from `WHERE`, which filters rows after that.
+- `FROM OPEN ON <date> CLOSE ON <date> CLEAR` summarizes/truncates the ledger to a period: `OPEN ON` replaces everything before the date with opening-balance entries, `CLOSE ON` drops entries on or after the date, `CLEAR` moves income/expense balances into equity (for a balance-sheet-style report). A plain `FROM <expr>` (e.g. `FROM year = 2024`) is just a row filter, equivalent to putting the same expression in `WHERE` (this differs from Beancount 2, where FROM selected whole transactions). To match whole transactions by their accounts use `has_account('regex')` or `'Full:Account' IN accounts`.
 - Dates are literals with no quotes: `date >= 2024-01-01`. Income postings and accounts are stored as \
 **negative** numbers (money leaving Income into Assets/Expenses); negate sums of Income with `-` or `neg()` \
 to show a positive figure.
@@ -140,5 +152,19 @@ def render_ledger_schema(ledger: Ledger) -> str:
     return "\n".join(parts)
 
 
-def user_prompt(ledger: Ledger, question: str) -> str:
+def render_compact_schema(ledger: Ledger) -> str:
+    """Just the operating currency and a flat account list: the minimum a user might reasonably paste in."""
+    return (f"Operating currency: {ledger.base}.\n"
+            f"Accounts: {', '.join(sorted(ledger.accounts))}")
+
+
+SCHEMA_MODES = ("none", "compact", "full")
+
+
+def user_prompt(ledger: Ledger, question: str, mode: str = "full") -> str:
+    """The user turn. ``none`` is the question alone: the model must not depend on ledger details."""
+    if mode == "none":
+        return question
+    if mode == "compact":
+        return f"Ledger:\n{render_compact_schema(ledger)}\n\nQuestion: {question}"
     return f"Ledger schema:\n{render_ledger_schema(ledger)}\n\nQuestion: {question}"
