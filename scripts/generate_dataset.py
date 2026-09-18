@@ -3,9 +3,9 @@
 
 Two kinds of examples are produced, both chat-formatted with the same short system prompt:
 
-* ``text2bql``: an English question -> one BQL statement. The prompt carries a description of the ledger only
-  some of the time (``--schema-weights``): mostly the question alone, sometimes a compact account list, sometimes
-  the full schema, so the model works with or without one and never depends on a particular ledger's accounts.
+* ``text2bql``: an English question -> one BQL statement. The prompt is the question alone, so the model never
+  depends on a particular ledger's accounts. ``--schema-weights`` can mix in a compact account list or the full
+  schema, but that is off by default.
 * ``reference``: questions about BQL itself (tables, columns, functions, core concepts), built from beanquery's
   live registry, so the model can drop the long reference text from its prompt.
 
@@ -89,8 +89,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ledgers", type=int, default=350, help="number of distinct synthetic ledgers to generate")
     ap.add_argument("--per-ledger", type=int, default=18, help="target number of accepted text2bql examples per ledger")
-    ap.add_argument("--schema-weights", type=float, nargs=3, default=[0.70, 0.15, 0.15], metavar=("NONE", "COMPACT", "FULL"),
-                    help="share of text2bql examples whose prompt has no ledger info / a compact account list / the full schema")
+    ap.add_argument("--schema-weights", type=float, nargs=3, default=[1.0, 0.0, 0.0], metavar=("NONE", "COMPACT", "FULL"),
+                    help="share of text2bql examples whose prompt has no ledger info / a compact account list / the full schema (default: question only)")
     ap.add_argument("--no-reference", action="store_true", help="skip the BQL reference (tables/columns/functions/concepts) examples")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data"))

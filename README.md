@@ -12,9 +12,7 @@ sampled from another language model: every example is checked against the real i
 
 | Task | Prompt (`user` turn) | Answer |
 | --- | --- | --- |
-| **text2bql, schema-free** (~70%) | just the question, e.g. `How much did I spend on groceries in 2024?` | a `sql` block: `SELECT sum(position) WHERE account ~ 'Groceries' AND year = 2024` |
-| text2bql, compact schema (~15%) | operating currency + flat account list, then the question | same, using the exact account names |
-| text2bql, full schema (~15%) | currency, date range, accounts, tags, links, payees, metadata keys, then the question | same |
+| **text2bql** (~6,000 examples) | just the question, e.g. `How much did I spend on groceries in 2024?` | a `sql` block: `SELECT sum(position) WHERE account ~ 'Groceries' AND year = 2024` |
 | **reference** (~280 examples) | `What does date_trunc do in BQL?`, `What columns does the postings table have?`, `Why can't I GROUP BY tags?`, ... | short explanation, with an executable example where useful |
 
 Consequences of "must not depend on the ledger":
@@ -69,7 +67,8 @@ python scripts/generate_dataset.py --ledgers 350 --per-ledger 18 --seed 1 --out 
 python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
 ```
 
-`--schema-weights NONE COMPACT FULL` (default `0.70 0.15 0.15`) sets how often the prompt carries ledger information.
+Every prompt is the question alone. `--schema-weights NONE COMPACT FULL` (default `1 0 0`) can mix in a compact account
+list or the full ledger schema if you ever want a model that also uses one; that is off by default.
 
 Each line of `data/train.jsonl` / `data/val.jsonl`:
 
@@ -82,9 +81,8 @@ Each line of `data/train.jsonl` / `data/val.jsonl`:
 ```
 
 `meta` is for filtering and inspection; most trainers only read `messages`. Examples are short: roughly 250-350
-tokens when schema-free (system prompt included), up to about 580 with a compact account list and about 870 with the
-full schema (estimated from character counts). `max_seq_length=1024` fits everything; 2048 leaves margin, and both
-need far less VRAM than the 32768 default that made the earlier training attempt run out of memory.
+tokens including the system prompt (estimated from character counts). `max_seq_length=1024` fits everything; 2048
+leaves margin, and both need far less VRAM than the 32768 default that made an earlier training attempt run out of memory.
 
 ## Using the fine-tuned model
 
@@ -103,8 +101,9 @@ out = model.generate(**inputs, max_new_tokens=300, do_sample=False)
 print(tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
 ```
 
-If you know your ledger's accounts you can prepend them (`Ledger:\nOperating currency: CAD.\nAccounts: a, b, c\n\nQuestion: ...`),
-which the model has also seen and which makes the account names exact.
+Send the question alone: the model is not trained on prompts that carry an account list (regenerate with
+`--schema-weights` if you want that). Name exact accounts, payees, tags and currencies in the question when it matters;
+natural words such as "groceries" are matched with a keyword regex.
 
 ## Loading with Unsloth
 
