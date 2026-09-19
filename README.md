@@ -81,8 +81,8 @@ Each line of `data/train.jsonl` / `data/val.jsonl`:
 ```
 
 `meta` is for filtering and inspection; most trainers only read `messages`. Examples are short: roughly 250-350
-tokens including the system prompt (estimated from character counts). `max_seq_length=1024` fits everything; 2048
-leaves margin, and both need far less VRAM than the 32768 default that made an earlier training attempt run out of memory.
+tokens including the system prompt (estimated from character counts). `max_seq_length=1024` fits everything and 2048
+leaves margin; there is no need for a model's maximum context (e.g. 32768), which needs far more VRAM.
 
 ## Using the fine-tuned model
 
@@ -129,3 +129,9 @@ Then train on the `text` column with `trl.SFTTrainer` (2-3 epochs is a reasonabl
   but the base currency has to be stated when a query needs one.
 - Beanquery is pinned to git HEAD (`0.3.0.dev0`) rather than PyPI's `0.2.0`, which does not match what the data was
   validated against.
+
+## License
+
+Copyright (C) 2026 Patrick Ruckstuhl. Licensed under the [GNU General Public License, version 2](LICENSE)
+(`GPL-2.0-only`), the same license as `beanquery` and Beancount. This applies to the code and to the generated
+dataset: the code imports `beanquery`, and the reference examples paraphrase its documentation and docstrings.

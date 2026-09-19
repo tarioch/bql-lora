@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "bql-lora"
 version = "0.1.0"
 description = "Training data generator for fine-tuning LLMs on the Beancount Query Language (beanquery, Beancount v3)"
+license = "GPL-2.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "beancount >= 3.0",
