@@ -20,6 +20,15 @@ from .schema import SYSTEM_PROMPT
 
 DEFAULT_GGUF = "qwen2.5-coder-7b-instruct.Q4_K_M.gguf"
 
+# Qwen's own default system message: what its chat template injects when a training example has none.
+QWEN_DEFAULT_SYSTEM = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+
+# Which system message the Modelfile bakes in. It has to match what the model was trained with:
+#   bql   the training system prompt (data/ and the default)
+#   qwen  Qwen's stock line, for a model trained on --no-system data with Qwen's chat template
+#   none  no system message at all
+SYSTEM_CHOICES = ("bql", "qwen", "none")
+
 # Plain ChatML as used by Qwen2.5: <|im_start|>role\ncontent<|im_end|>\n ... <|im_start|>assistant\n
 TEMPLATE = (
     "{{- range .Messages }}<|im_start|>{{ .Role }}\n"
@@ -28,14 +37,19 @@ TEMPLATE = (
 )
 
 
-def render_modelfile(gguf: str = DEFAULT_GGUF) -> str:
-    """The Modelfile text (LF line endings, trailing newline)."""
-    if '"""' in SYSTEM_PROMPT:
-        raise ValueError("SYSTEM_PROMPT contains a triple quote, which cannot be embedded in a Modelfile")
-    return (
+def render_modelfile(gguf: str = DEFAULT_GGUF, system: str = "bql") -> str:
+    """The Modelfile text (LF line endings, trailing newline). ``system`` is one of ``SYSTEM_CHOICES``."""
+    if system not in SYSTEM_CHOICES:
+        raise ValueError(f"system must be one of {SYSTEM_CHOICES}, not {system!r}")
+    text = {"bql": SYSTEM_PROMPT, "qwen": QWEN_DEFAULT_SYSTEM, "none": None}[system]
+    if text is not None and '"""' in text:
+        raise ValueError("the system prompt contains a triple quote, which cannot be embedded in a Modelfile")
+    out = (
         f"FROM {gguf}\n"
         f'TEMPLATE """{TEMPLATE}"""\n'
         "PARAMETER temperature 0\n"
         'PARAMETER stop "<|im_end|>"\n'
-        f'SYSTEM """{SYSTEM_PROMPT}"""\n'
     )
+    if text is not None:
+        out += f'SYSTEM """{text}"""\n'
+    return out

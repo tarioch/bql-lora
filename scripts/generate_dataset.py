@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Generate a training set for fine-tuning an LLM on the Beancount Query Language (BQL) with Unsloth.
 
-Two kinds of examples are produced, both chat-formatted with the same short system prompt:
+Two kinds of examples are produced, both chat-formatted with the same short system prompt (or, with
+``--no-system``, without any system message):
 
 * ``text2bql``: an English question -> one BQL statement. The prompt is the question alone, so the model never
   depends on a particular ledger's accounts. ``--schema-weights`` can mix in a compact account list or the full
@@ -28,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from bql_lora.executor import Executor, QueryError  # noqa: E402
-from bql_lora.format import build_example  # noqa: E402
+from bql_lora.format import build_example, strip_system  # noqa: E402
 from bql_lora.intents import Gen, REGISTRY, Skip  # noqa: E402
 from bql_lora.ledger import generate_ledger  # noqa: E402
 from bql_lora.reference import build_reference_examples  # noqa: E402
@@ -92,6 +93,9 @@ def main() -> None:
     ap.add_argument("--schema-weights", type=float, nargs=3, default=[1.0, 0.0, 0.0], metavar=("NONE", "COMPACT", "FULL"),
                     help="share of text2bql examples whose prompt has no ledger info / a compact account list / the full schema (default: question only)")
     ap.add_argument("--no-reference", action="store_true", help="skip the BQL reference (tables/columns/functions/concepts) examples")
+    ap.add_argument("--no-system", action="store_true",
+                    help="omit the system message from every example, so the model learns the behaviour for any input "
+                         "instead of keying on a constant system prompt (the examples are otherwise identical)")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data"))
     ap.add_argument("--val-fraction", type=float, default=0.04)
@@ -124,6 +128,8 @@ def main() -> None:
         examples.extend(reference)
 
     master_rng.shuffle(examples)
+    if args.no_system:
+        examples = [strip_system(e) for e in examples]
     n_val = max(1, int(len(examples) * args.val_fraction))
     val, train = examples[:n_val], examples[n_val:]
 

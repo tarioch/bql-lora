@@ -21,6 +21,11 @@ def assistant_message(rng: random.Random, sample: Sample) -> str:
     return f"{code}\n\n{sample.explanation}"
 
 
+def strip_system(example: dict) -> dict:
+    """The same example without its system message, for a model that should not depend on one."""
+    return {**example, "messages": [m for m in example["messages"] if m["role"] != "system"]}
+
+
 def build_example(rng: random.Random, ledger: Ledger, sample: Sample, mode: str = "full") -> dict:
     return {
         "messages": [

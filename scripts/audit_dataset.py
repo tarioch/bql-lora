@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Check a generated dataset (structure + ledger independence).
 
-1. Structure: every line is ``{"messages": [system, user, assistant], "meta": {...}}``, and every ```sql
+1. Structure: every line is ``{"messages": [[system,] user, assistant], "meta": {...}}`` (the system message is
+   optional, see ``generate_dataset.py --no-system``), and every ```sql
    block in an assistant message parses as BQL.
 2. Leak audit: in ``text2bql`` examples whose prompt has no ledger information (``schema == "none"``), every
    ledger-specific literal used in the BQL (full account names, currency codes, account keywords) must be
@@ -60,10 +61,12 @@ def main(paths: list[str]) -> int:
             n += 1
             ex = json.loads(line)
             msgs = ex.get("messages", [])
-            if [m["role"] for m in msgs] != ["system", "user", "assistant"] or "meta" not in ex:
+            # A system message is optional (generate_dataset.py --no-system omits it).
+            if [m["role"] for m in msgs] not in (["system", "user", "assistant"], ["user", "assistant"]) or "meta" not in ex:
                 bad_structure.append(f"{path}:{lineno}")
                 continue
-            for block in FENCE.findall(msgs[2]["content"]):
+            user, assistant = msgs[-2]["content"], msgs[-1]["content"]
+            for block in FENCE.findall(assistant):
                 try:
                     parser.parse(block)
                 except Exception as e:  # noqa: BLE001
@@ -71,9 +74,9 @@ def main(paths: list[str]) -> int:
             meta = ex["meta"]
             if meta.get("task") == "text2bql" and meta.get("schema") == "none":
                 n_none += 1
-                found = leaks(msgs[1]["content"], meta["bql"])
+                found = leaks(user, meta["bql"])
                 if found:
-                    bad_leaks.append((f"{path}:{lineno}", found, msgs[1]["content"], meta["bql"]))
+                    bad_leaks.append((f"{path}:{lineno}", found, user, meta["bql"]))
 
     print(f"{n} examples ({n_none} schema-free text2bql); structure errors: {len(bad_structure)}, "
           f"unparsable BQL blocks: {len(bad_parse)}, ledger leaks: {len(bad_leaks)}")
