@@ -1,0 +1,3 @@
+# Ollama keeps carriage returns found inside a Modelfile's template and system prompt, so a CRLF checkout
+# silently changes what the model sees. Keep this file LF on every platform.
+ollama/Modelfile text eol=lf
