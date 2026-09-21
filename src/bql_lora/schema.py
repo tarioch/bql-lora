@@ -7,9 +7,10 @@ and the table/column definitions in ``beanquery/sources/beancount.py``) for the 
 
 from __future__ import annotations
 
-import datetime as dt
+from typing import TYPE_CHECKING
 
-from .ledger import Ledger
+if TYPE_CHECKING:  # only for annotations; keeps this module importable without beancount (e.g. by scripts/train.py)
+    from .ledger import Ledger
 
 SYSTEM_PROMPT = """\
 You are an expert in the Beancount Query Language (BQL), the SQL-like language of `bean-query` (the \

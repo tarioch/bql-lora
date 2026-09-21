@@ -3,3 +3,7 @@ __pycache__/
 .venv/
 *.egg-info/
 build/
+
+# Unsloth writes a compiled-kernel cache into the working directory; training outputs stay local
+unsloth_compiled_cache/
+outputs/
