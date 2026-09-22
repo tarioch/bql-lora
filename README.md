@@ -95,9 +95,9 @@ leaves margin; there is no need for a model's maximum context (e.g. 32768), whic
 
 ## The system prompt: trigger or baked in?
 
-A constant system prompt is the easiest feature for a fine-tune to key on. Measured on a model fine-tuned on `data/`
-(with the prompt), using [`scripts/check_system_prompt_sensitivity.py`](scripts/check_system_prompt_sensitivity.py)
-on 8 questions:
+A constant system prompt is the easiest feature for a fine-tune to key on. Measured with
+[`scripts/check_system_prompt_sensitivity.py`](scripts/check_system_prompt_sensitivity.py) on 8 questions, on a model
+fine-tuned on `data/` (the prompt present in every example):
 
 | System message at inference | Answers containing a `sql` block |
 | --- | --- |
@@ -105,21 +105,23 @@ on 8 questions:
 | none | 1 of 8: stock Qwen behaviour (refusals, invented SQL such as `FROM expenses`, generic explanations) |
 | Qwen's stock line | 1 of 8: the same |
 
-So that model does BQL only when the prompt is present. That works while the Modelfile supplies it, and breaks when a
+That model does BQL only when the prompt is present. That works while the Modelfile supplies it, and breaks when a
 client sends its own system message (Ollama then ignores the Modelfile's `SYSTEM`).
 
 [`data/no-system/`](data/no-system) holds the same examples without any system message, so the weights have to carry the
-behaviour for every input. It also cuts an example from about 255 to about 75 tokens. To use it:
+behaviour for every input (it also cuts an example from about 255 to about 75 tokens). Qwen's chat template injects its
+own stock line when a training example has no system message, so that is effectively what the model is trained with.
+Retrained on it (`python scripts/train.py`'s default, see [Training](#training)) and measured the same way:
 
-1. Train on `data/no-system/train.jsonl` (`python scripts/train.py` does that by default, see [Training](#training)).
-2. Run `scripts/check_system_prompt_sensitivity.py --gguf your-model.gguf`. All three system variants should now answer
-   in BQL; if `none` and `qwen` behave differently, prefer the one that scores best.
-3. Bake that choice into the Modelfile: `python scripts/make_modelfile.py --system qwen ...` if the trainer used Qwen's
-   chat template (it injects Qwen's stock system line when a conversation has none), or `--system none` if the trained
-   text had no system block at all. The default, `--system bql`, matches a model trained on `data/`.
+| System message at inference | Answers containing a `sql` block |
+| --- | --- |
+| Qwen's stock line | 8 of 8 |
+| none | 7 of 8 (the one miss: a plain "how are you" correctly got a plain reply, not a forced query) |
+| the (unrelated) training system prompt from the other model | 8 of 8 |
 
-The no-system route is the recommended direction, but no model trained on it has been measured yet, so `ollama/Modelfile`
-still defaults to the verified `bql` variant.
+So `ollama/Modelfile` now defaults to `--system qwen`, and `scripts/train.py`'s default (`data/no-system/`) is the
+recommended way to train. If you instead train on `data/` (the prompt present in every example), use
+`--system bql`.
 
 ## Training
 

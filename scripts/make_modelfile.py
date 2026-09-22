@@ -4,7 +4,7 @@
 Usage:
     python scripts/make_modelfile.py                          # write ollama/Modelfile
     python scripts/make_modelfile.py --gguf my.Q4_K_M.gguf -o /path/to/Modelfile
-    python scripts/make_modelfile.py --system qwen ...        # for a model trained on data/no-system
+    python scripts/make_modelfile.py --system bql ...          # for a model trained on data/ (with the prompt)
     python scripts/make_modelfile.py --check                  # exit 1 if ollama/Modelfile is out of date
 """
 
@@ -23,9 +23,10 @@ from bql_lora.modelfile import DEFAULT_GGUF, SYSTEM_CHOICES, render_modelfile  #
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--gguf", default=DEFAULT_GGUF, help="GGUF file the Modelfile's FROM line points at (default: %(default)s)")
-    ap.add_argument("--system", choices=SYSTEM_CHOICES, default="bql",
-                    help="system message to bake in; must match how the model was trained: 'bql' = the training system prompt "
-                         "(data/), 'qwen' = Qwen's stock line (data/no-system/, if Qwen's chat template was used), 'none' = no system message")
+    ap.add_argument("--system", choices=SYSTEM_CHOICES, default="qwen",
+                    help="system message to bake in; must match how the model was trained: 'qwen' = Qwen's stock line, the "
+                         "default and the verified choice for a model trained on data/no-system/ (see the README), "
+                         "'bql' = the training system prompt, for data/ (with the prompt in every example), 'none' = no system message")
     ap.add_argument("-o", "--out", type=Path, default=ROOT / "ollama" / "Modelfile")
     ap.add_argument("--check", action="store_true", help="do not write; fail if the file on disk differs from what would be generated")
     args = ap.parse_args()

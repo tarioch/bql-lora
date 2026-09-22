@@ -31,9 +31,12 @@ def test_modelfile_has_lf_line_endings_only():
 
 
 def test_system_block_matches_the_chosen_system_message():
-    assert _system_value((ROOT / "ollama" / "Modelfile").read_text(encoding="utf-8")) == SYSTEM_PROMPT
-    assert _system_value(render_modelfile(system="bql")) == SYSTEM_PROMPT
+    # The committed Modelfile matches a model trained on data/no-system/ (scripts/train.py's default), where
+    # Qwen's chat template injects Qwen's own stock line for an example with no system message. Verified with
+    # scripts/check_system_prompt_sensitivity.py: 8/8 test questions answered in BQL under this choice.
+    assert _system_value((ROOT / "ollama" / "Modelfile").read_text(encoding="utf-8")) == QWEN_DEFAULT_SYSTEM
     assert _system_value(render_modelfile(system="qwen")) == QWEN_DEFAULT_SYSTEM
+    assert _system_value(render_modelfile(system="bql")) == SYSTEM_PROMPT
     assert _system_value(render_modelfile(system="none")) is None
     assert "SYSTEM" not in render_modelfile(system="none")
 
