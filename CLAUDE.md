@@ -12,32 +12,33 @@ about working in the code, not the training design.
 
 ## Two separate Python environments
 
-- **This repo's own environment** (`pip install -e .`): `beancount` + `beanquery`, no GPU needed. Used for
+- **This repo's own environment** (`uv sync`): `beancount` + `beanquery`, no GPU needed. Used for
   `generate_dataset.py`, `audit_dataset.py`, and both test files.
 - **A separate GPU environment with Unsloth installed**, not a dependency of this repo (it isn't in
-  `pyproject.toml`/`requirements.txt` on purpose — it needs a specific CUDA/torch stack and doesn't belong on a
+  `pyproject.toml` on purpose — it needs a specific CUDA/torch stack and doesn't belong on a
   machine just auditing or regenerating the dataset). Only `scripts/train.py` and `scripts/export_gguf.py` need it;
   both run fine without `beancount`/`beanquery` installed at all (they only read pre-built `.jsonl` files).
 
 `beanquery` is pinned to `git+https://github.com/beancount/beanquery.git` (git HEAD), not the PyPI release: the
 `HAVING`/`PIVOT BY` support and several functions this dataset exercises aren't in PyPI's `0.2.0`. Don't "fix" this
-to a version pin without checking those features still work.
+to a version pin without checking those features still work. `uv.lock` records the exact commit last resolved;
+run `uv lock --upgrade` to intentionally move to a newer `beanquery` HEAD (and `uv sync` to apply it).
 
 ## Commands
 
 ```bash
-pip install -e .                                                          # this repo's own deps (no GPU)
+uv sync                                                                    # this repo's own deps (no GPU)
 
-python scripts/generate_dataset.py --ledgers 350 --per-ledger 18 --seed 1 --out data   # regenerate data/
-python scripts/audit_dataset.py data/train.jsonl data/val.jsonl                        # structure + parses + no ledger leaks
+uv run python scripts/generate_dataset.py --ledgers 350 --per-ledger 18 --seed 1 --out data   # regenerate data/
+uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl                        # structure + parses + no ledger leaks
 
-python tests/test_modelfile.py                                            # or: pytest tests/test_modelfile.py
-python tests/test_smoke.py                                                # every intent, every prompt mode (~3 min)
-# a single test: pytest tests/test_smoke.py::test_all_intents_fire_and_validate_in_every_mode -q
+uv run python tests/test_modelfile.py                                     # or: uv run pytest tests/test_modelfile.py
+uv run python tests/test_smoke.py                                         # every intent, every prompt mode (~3 min)
+# a single test: uv run pytest tests/test_smoke.py::test_all_intents_fire_and_validate_in_every_mode -q
 # (neither file needs pytest to run: python <file>.py runs every test_* in it and prints "ok")
 
-python scripts/make_modelfile.py --check                                  # fails if ollama/Modelfile is stale
-python scripts/make_modelfile.py                                          # regenerate it
+uv run python scripts/make_modelfile.py --check                           # fails if ollama/Modelfile is stale
+uv run python scripts/make_modelfile.py                                   # regenerate it
 
 # needs the separate Unsloth/GPU environment:
 python scripts/train.py --max-steps 2                                     # smoke test: 2 optimizer steps
