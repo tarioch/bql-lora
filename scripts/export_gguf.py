@@ -54,9 +54,9 @@ def main() -> int:
     gguf = gguf_files[0]
     print(f"\nwrote {gguf} ({gguf.stat().st_size / 2**30:.2f} GiB)")
     print("\nNext:\n"
-          f'  python scripts/make_modelfile.py --system qwen --gguf "{gguf}" -o Modelfile\n'
+          f'  python scripts/make_modelfile.py --gguf "{gguf}" -o Modelfile\n'
           "  ollama create bql -f Modelfile\n"
-          f'  python scripts/check_system_prompt_sensitivity.py --gguf "{gguf}"')
+          '  ollama run bql "How much did I spend on groceries in 2024?"')
     return 0
 
 

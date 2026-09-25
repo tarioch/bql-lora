@@ -134,7 +134,7 @@ def main() -> int:
     print("\nNext: export the merged model as a GGUF (Q4_K_M), then\n"
           "  python scripts/make_modelfile.py --gguf <your.gguf> -o Modelfile\n"
           "  ollama create bql -f Modelfile\n"
-          "  python scripts/check_system_prompt_sensitivity.py --gguf <your.gguf>")
+          '  ollama run bql "How much did I spend on groceries in 2024?"')
     return 0
 
 

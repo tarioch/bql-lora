@@ -29,9 +29,9 @@ def test_modelfile_has_lf_line_endings_only():
 
 
 def test_system_block_is_qwens_default_line():
-    # Verified with check_system_prompt_sensitivity.py: a model trained with no system message in its data answers
-    # 8 of 8 test questions in BQL under this line (Qwen's chat template's own default for a conversation with
-    # none), vs. only 1 of 8 for an earlier model that had a custom system prompt baked into every training example.
+    # Verified directly against Ollama: a model trained with no system message in its data answers 8 of 8 test
+    # questions in BQL under this line (Qwen's chat template's own default for a conversation with none), vs.
+    # only 1 of 8 for an earlier model that had a custom system prompt baked into every training example.
     assert _system_value((ROOT / "ollama" / "Modelfile").read_text(encoding="utf-8")) == QWEN_DEFAULT_SYSTEM
     assert _system_value(render_modelfile()) == QWEN_DEFAULT_SYSTEM
 

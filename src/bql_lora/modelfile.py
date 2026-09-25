@@ -5,8 +5,8 @@ The Modelfile is generated rather than hand-edited so it cannot silently drift f
 Training examples carry no system message (see README, "The system prompt: trigger or baked in?"): a constant one
 gives a fine-tune something to key on instead of learning the behaviour for any input. Qwen's chat template
 supplies its own default system line for a conversation with none, which is what the model was trained with, so
-that line has to be the Modelfile's ``SYSTEM`` too (measured with ``check_system_prompt_sensitivity.py``: without
-it, only 1 of 8 test questions came back as BQL; with it, 8 of 8 did).
+that line has to be the Modelfile's ``SYSTEM`` too (measured directly against Ollama: without it, only 1 of 8 test
+questions came back as BQL; with it, 8 of 8 did).
 
 Design notes, each learned the hard way:
 
