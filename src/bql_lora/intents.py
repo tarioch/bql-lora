@@ -721,7 +721,7 @@ def distinct_lists(g: Gen) -> Sample:
 @intent(5)
 def accounts_table(g: Gen) -> Sample:
     rng = g.rng
-    variant = rng.choice(["open", "closed", "opened_year", "list", "open_dates", "opened_by_root", "account_meta"])
+    variant = rng.choice(["open", "closed", "opened_year", "list", "open_dates", "opened_by_root", "account_meta", "meta_subscript"])
     if variant == "open":
         bql = select(["account", "open.date AS opened"], frm="#accounts", where=["close IS NULL"], order=["account"])
         question = g.ask("List all currently open accounts with their opening dates", "Which accounts are still open?", "Show open accounts and when they were opened")
@@ -749,15 +749,22 @@ def accounts_table(g: Gen) -> Sample:
         bql = select(["root(account, 1) AS type", "count(*) AS n"], frm="#accounts", group="type", order=["type"])
         question = g.ask("How many accounts are there of each type (Assets, Expenses, ...)?", "Count accounts per root type")
         expl = "root(account, 1) returns the first component of the account name."
+    elif variant == "account_meta":
+        keys = sorted({k for o, _ in g.led.accounts.values() for k in (o.meta or {}) if k not in ("filename", "lineno")})
+        if not keys:
+            raise Skip
+        k = keys[0]
+        bql = select(["account", f"open_meta(account, {q(k)}) AS {k}"], frm="#accounts", where=[f"open_meta(account, {q(k)}) IS NOT NULL"], order=["account"])
+        question = g.ask(f"Show the '{k}' metadata of each account that has it", f"Which accounts define {k} in their open directive?")
+        expl = "open_meta(account, key) reads metadata from the account's open directive."
     else:
         keys = sorted({k for o, _ in g.led.accounts.values() for k in (o.meta or {}) if k not in ("filename", "lineno")})
         if not keys:
             raise Skip
         k = keys[0]
-        bql = select(["account", f"open_meta('{k}') AS {k}"] if False else ["account", f"open_meta(account, {q(k)}) AS {k}"], where=["account ~ '^(Assets|Liabilities)'"], group=f"account, {k}") if False else \
-            select(["account", f"open_meta(account, {q(k)}) AS {k}"], frm="#accounts", where=[f"open_meta(account, {q(k)}) IS NOT NULL"], order=["account"])
-        question = g.ask(f"Show the '{k}' metadata of each account that has it", f"Which accounts define {k} in their open directive?")
-        expl = "open_meta(account, key) reads metadata from the account's open directive."
+        bql = select(["account", f"open.meta[{q(k)}] AS {k}"], frm="#accounts", order=[f"{k} DESC", "account"])
+        question = g.ask(f"List every account with its '{k}' metadata, largest first, and unset ones last", f"Sort accounts by their {k} metadata value, descending")
+        expl = "open.meta['key'] subscripts the metadata dict of the account's open directive directly (an alternative to open_meta()); NULLs sort last in descending order."
     return Sample("accounts_table", question, bql, expl)
 
 
@@ -823,6 +830,30 @@ def balance_assertions(g: Gen) -> Sample:
         question = g.ask("How many balance assertions are there per account?", "Count balance directives by account")
         expl = "Groups the balances table by account."
     return Sample("balance_assertions", question, bql, expl, allow_empty=variant == "failed")
+
+
+@intent(3)
+def stale_accounts(g: Gen) -> Sample:
+    """Which open accounts need a fresh balance check. From a beancount@googlegroups.com thread: NOT close_date(account)
+    on #balances is how to exclude closed accounts from a "needs updating" report."""
+    rng = g.rng
+    if not any(type(e).__name__ == "Balance" for e in g.led.entries):
+        raise Skip
+    variant = rng.choice(["last_checked", "oldest", "never"])
+    if variant == "last_checked":
+        bql = select(["account", "max(date) AS last_checked"], frm="#balances", where=["NOT close_date(account)"], group="account", order=["last_checked"])
+        question = g.ask("For each still-open account, when was it last balance-checked?", "Show the most recent balance assertion date for every open account, oldest first")
+        expl = "NOT close_date(account) excludes accounts that have since been closed from the balances table, grouped to the latest check per account."
+    elif variant == "oldest":
+        n = rng.choice([3, 5, 10])
+        bql = select(["account", "max(date) AS last_checked"], frm="#balances", where=["NOT close_date(account)"], group="account", order=["last_checked"], limit=n)
+        question = g.ask(f"Which {n} open accounts have gone the longest without a balance check?", f"Show the {n} most overdue accounts for a balance assertion")
+        expl = "Sorts open accounts by their most recent balance check, oldest (most overdue) first."
+    else:
+        bql = select("account", frm="#accounts", where=["account ~ '^(Assets|Liabilities)'", "close IS NULL", "account NOT IN (SELECT account FROM #balances)"], order=["account"])
+        question = g.ask("Which open asset or liability accounts have never had a balance assertion?", "List open Assets/Liabilities accounts with no balance check at all")
+        expl = "account NOT IN (SELECT account FROM #balances) finds accounts that never appear in the balances table."
+    return Sample("stale_accounts", question, bql, expl, allow_empty=True)
 
 
 def _accounts_with_balance(self: Gen) -> list[str]:
@@ -1058,7 +1089,7 @@ def having_filter(g: Gen) -> Sample:
 @intent(3)
 def date_functions(g: Gen) -> Sample:
     rng = g.rng
-    variant = rng.choice(["weekday", "dow", "week", "bin", "quarter", "dom", "yearmonth", "age"])
+    variant = rng.choice(["weekday", "dow", "week", "bin", "bin_week_end", "quarter", "dom", "yearmonth", "age"])
     sel = g.selector("Expenses", allow_multi=False)
     if variant == "weekday":
         bql = select(["weekday(date) AS day", "sum(number) AS total"], where=[sel.cond], group="day", order=["total DESC"])
@@ -1078,6 +1109,11 @@ def date_functions(g: Gen) -> Sample:
         bql = select([f"date_bin('{stride}', date, {origin}) AS bucket", "sum(number) AS total"], where=[sel.cond], group="bucket", order=["bucket"])
         question = g.ask(f"Bucket {sel.nl} spending into {stride} intervals starting from {origin}", f"Total for {sel.nl} per {stride} window aligned at {origin}")
         expl = "date_bin(stride, source, origin) assigns each date to a bucket of the given size aligned with the origin."
+    elif variant == "bin_week_end":
+        origin = g.first
+        bql = select([f"date_bin('7 days', date, {origin}) + interval('6 days') AS week_end", "sum(number) AS total"], where=[sel.cond], group="week_end", order=["week_end"])
+        question = g.ask(f"Show weekly totals for {sel.nl}, labeled by the last day of each week", f"Weekly {sel.nl} spending, with each week shown by its end date")
+        expl = "date_bin() buckets by the week's start; adding interval('6 days') shifts the label to the week's last day."
     elif variant == "quarter":
         bql = select(["quarter(date) AS quarter", "sum(number) AS total"], where=[sel.cond], group="quarter", order=["quarter"])
         question = g.ask(f"Show {sel.nl} per quarter", f"Quarterly totals for {sel.nl}")
@@ -1386,7 +1422,7 @@ def string_functions(g: Gen) -> Sample:
 @intent(2)
 def subquery_in(g: Gen) -> Sample:
     rng = g.rng
-    variant = rng.choice(["above_avg", "nested", "distinct_count"])
+    variant = rng.choice(["above_avg", "nested", "distinct_count", "threshold_in"])
     if variant == "above_avg":
         sel = g.selector("Expenses", allow_multi=False)
         inner = select(["year", "month", "sum(number) AS total"], where=[sel.cond, f"currency = '{g.base}'"], group="year, month", multiline=False)
@@ -1398,6 +1434,14 @@ def subquery_in(g: Gen) -> Sample:
         bql = select(["count(*) AS accounts", "max(total) AS highest"], frm=f"({inner})", multiline=len(inner) > 60)
         question = g.ask(f"How many expense accounts are there and what is the highest total among them, in {g.base}?", f"Count expense accounts and find the largest account total in {g.base}")
         expl = "The inner query totals each account; the outer query aggregates those totals."
+    elif variant == "threshold_in":
+        # From a beancount@googlegroups.com thread (Daniele Nicolodi): a subquery on the right of IN can filter one
+        # query's rows by an aggregate computed over another. HAVING cannot be used directly in WHERE for this.
+        thr = rng.choice([100, 250, 500])
+        inner = select("account", where=["account ~ '^Expenses'", f"currency = '{g.base}'"], group="account", having=f"number(only('{g.base}', sum(position))) > {thr}", multiline=False)
+        bql = select(["date", "payee", "narration", "account", "position"], where=[f"account IN ({inner})"], order=["date"])
+        question = g.ask(f"Show postings on expense accounts whose total spending exceeds {thr} {g.base}", f"List transactions for expense accounts that add up to more than {thr} {g.base} overall")
+        expl = "The subquery groups and filters accounts by their total with HAVING, then the outer query keeps only postings whose account is IN that set."
     else:
         bql = select("count(*) AS payees", frm="(SELECT DISTINCT payee)")
         question = g.ask("How many distinct payees are there?", "Count the unique payees")

@@ -43,6 +43,20 @@ baseline to compare against.
   - `PRINT FROM` runs over directives, so it has no `account` column (use `IN accounts` / `has_account`).
   - There is no `weight()` or `raw()` function (`weight` is a column), no `avg()`, no `LIKE`, no `count(DISTINCT x)`.
   - `date_bin`/`interval` strides support only days, months and years.
+- **Real-world question patterns** come from reading threads on the [beancount@googlegroups.com](https://groups.google.com/g/beancount)
+  mailing list — real questions people asked, and fixes from the beanquery maintainer. The literal queries posted there
+  aren't reused as-is (they're often the broken attempt that prompted the question, or written against the older v2
+  `bean-query` syntax); instead, each pattern is turned into its own parameterized intent and verified the same way as
+  everything else. Patterns sourced this way so far:
+  - `open.meta['key']` as an alternative to `open_meta(account, 'key')` for reading account metadata (`accounts_table`).
+  - Finding accounts that need a fresh balance check, using `NOT close_date(account)` on `#balances` to exclude closed
+    accounts, and `account NOT IN (SELECT account FROM #balances)` for ones with no check at all (`stale_accounts`).
+  - Binning by week and labeling each bucket by its last day: `date_bin('7 days', date, origin) + interval('6 days')`
+    (`date_functions`).
+  - Filtering one query's rows by an aggregate computed over another, via `account IN (SELECT account ... HAVING ...)`
+    (`subquery_in`).
+  - A reference entry on a real reported pitfall: `last(balance)` grouped by account gives the *wrong* per-account
+    total, because `balance` is one running total over the whole row set, not one per group; `sum(position)` is correct.
 - **Every statement is executed.** Ledgers are synthetic but loaded with the real `beancount.loader`; each generated
   query runs against its ledger with `beanquery`, and is dropped if it fails to parse, compile or run, or returns nothing.
   Every SQL block in the reference answers is executed too, and building fails if one doesn't run.

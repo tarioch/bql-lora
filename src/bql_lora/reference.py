@@ -292,6 +292,19 @@ CONCEPTS: list[dict] = [
         answer=("The `balance` column of a posting is the running balance (an inventory) of the postings so far. To read the balance at the end of each month, take the "
                 "last value per month:\n\n```sql\nSELECT year, month, last(balance) AS end_balance\nWHERE account = 'Assets:Checking'\nGROUP BY year, month\nORDER BY year, month\n```"),
         examples=[]),
+    dict(topic="balance_group_by_pitfall", questions=[
+        "Why does GROUP BY account with last(balance) give the wrong total per account?",
+        "I used last(balance) grouped by account for net worth and the numbers are wrong, why?",
+        "Is last(balance) safe to use when a query covers more than one account?"],
+        answer=("No: `balance` is a single running total computed over the rows the query sees, in date order, not one running "
+                "total per account. Grouping by account and taking `last(balance)` still adds up postings from *every* account in "
+                "the row set along the way, so an account that comes later in date order picks up the earlier accounts' amounts "
+                "too. This is a real, reported beanquery gotcha, not a hypothetical: for two accounts with postings of 10 and 100, "
+                "`last(balance)` reports 10 and 110, not 10 and 100. To get a correct total per account, group by account and use "
+                "`sum(position)` instead:\n\n"
+                "```sql\nSELECT account, sum(position)\nWHERE date <= 2024-12-31 AND account ~ '^(Assets|Liabilities)'\nGROUP BY account\n```\n\n"
+                "`last(balance)` is only safe when the query is scoped to a single account (see the running-balance question above), "
+                "not when it groups several accounts together.")),
     dict(topic="shell_commands", questions=[
         "What commands does the bean-query shell have?", "How do I list the tables or describe a table in bean-query?", "How do I see how a BQL query is parsed?"],
         answer=("Besides BQL statements the shell has dot-commands: `.tables` lists the tables, `.describe <table>` lists a table's columns and types, `.explain <query>` "
