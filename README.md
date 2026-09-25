@@ -80,9 +80,9 @@ for why). The BQL reference that would otherwise have to go in a system prompt i
 ## Usage
 
 ```bash
-pip install -e .
-python scripts/generate_dataset.py --ledgers 350 --per-ledger 18 --seed 1 --out data
-python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
+uv sync
+uv run python scripts/generate_dataset.py --ledgers 350 --per-ledger 18 --seed 1 --out data
+uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
 ```
 
 Every prompt is the question alone. `--schema-weights NONE COMPACT FULL` (default `1 0 0`) can mix in a compact account
