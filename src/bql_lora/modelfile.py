@@ -2,11 +2,9 @@
 
 The Modelfile is generated rather than hand-edited so it cannot silently drift from what training actually used.
 
-Training examples carry no system message (see README, "The system prompt: trigger or baked in?"): a constant one
-gives a fine-tune something to key on instead of learning the behaviour for any input. Qwen's chat template
-supplies its own default system line for a conversation with none, which is what the model was trained with, so
-that line has to be the Modelfile's ``SYSTEM`` too (measured directly against Ollama: without it, only 1 of 8 test
-questions came back as BQL; with it, 8 of 8 did).
+Training examples carry no system message (see README, "The system prompt: trigger or baked in?"), so Qwen's chat
+template fills in its own default system line at training time. This Modelfile's ``SYSTEM`` has to be that same
+line, explicitly: unlike Qwen's own template, ours (below) has no built-in fallback for a request with none.
 
 Design notes, each learned the hard way:
 

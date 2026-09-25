@@ -22,9 +22,7 @@ def assistant_message(rng: random.Random, sample: Sample) -> str:
 
 
 def build_example(rng: random.Random, ledger: Ledger, sample: Sample, mode: str = "full") -> dict:
-    # No system message: a constant one makes a fine-tune key on its presence rather than learning the behaviour
-    # for any input (see README, "The system prompt: trigger or baked in?"). Qwen's chat template supplies its own
-    # default system line for a conversation with none, which is what ollama/Modelfile bakes into the model.
+    # No system message (see README, "The system prompt: trigger or baked in?").
     return {
         "messages": [
             {"role": "user", "content": user_prompt(ledger, sample.question, mode)},

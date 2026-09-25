@@ -12,10 +12,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # only for annotations; keeps this module importable without beancount (e.g. by scripts/train.py)
     from .ledger import Ledger
 
-# Training examples carry no system prompt at all (see README, "The system prompt: trigger or baked in?"): a
-# constant one gives a fine-tune something to key on instead of learning the behaviour for any input. This
-# long reference is not part of training either; it is kept only as the prompt for exercising a *non*-fine-tuned
-# base model, e.g. as an evaluation baseline to compare the fine-tune against.
+# Not part of training either (see README, "The system prompt: trigger or baked in?"): kept only as the prompt
+# for exercising a *non*-fine-tuned base model, as an evaluation baseline to compare the fine-tune against.
 LONG_REFERENCE = """\
 You are an expert in the Beancount Query Language (BQL), the SQL-like query language of `bean-query` \
 (the `beanquery` package, used with Beancount v3). Given a plain-English question about a person's \

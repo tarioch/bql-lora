@@ -29,9 +29,7 @@ def test_modelfile_has_lf_line_endings_only():
 
 
 def test_system_block_is_qwens_default_line():
-    # Verified directly against Ollama: a model trained with no system message in its data answers 8 of 8 test
-    # questions in BQL under this line (Qwen's chat template's own default for a conversation with none), vs.
-    # only 1 of 8 for an earlier model that had a custom system prompt baked into every training example.
+    # See README, "The system prompt: trigger or baked in?" for why (8/8 vs. 1/8, measured against Ollama).
     assert _system_value((ROOT / "ollama" / "Modelfile").read_text(encoding="utf-8")) == QWEN_DEFAULT_SYSTEM
     assert _system_value(render_modelfile()) == QWEN_DEFAULT_SYSTEM
 
@@ -54,9 +52,7 @@ def test_training_data_has_no_system_message():
     for name in ("train.jsonl", "val.jsonl"):
         with open(ROOT / "data" / name, encoding="utf-8") as f:
             for line in f:
-                assert [m["role"] for m in json.loads(line)["messages"]] == ["user", "assistant"], \
-                    f"data/{name} has a system message; a constant one gives a fine-tune something to key on " \
-                    "instead of learning the behaviour for any input"
+                assert [m["role"] for m in json.loads(line)["messages"]] == ["user", "assistant"], f"data/{name} has a system message"
 
 
 if __name__ == "__main__":
