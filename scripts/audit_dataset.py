@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 """Check a generated dataset (structure + ledger independence).
 
-1. Structure: every line is ``{"messages": [[system,] user, assistant], "meta": {...}}`` (the system message is
-   optional, see ``generate_dataset.py --no-system``), and every ```sql
-   block in an assistant message parses as BQL.
+1. Structure: every line is ``{"messages": [user, assistant], "meta": {...}}`` (no system message; see README,
+   "The system prompt: trigger or baked in?"), and every ```sql block in an assistant message parses as BQL.
 2. Leak audit: in ``text2bql`` examples whose prompt has no ledger information (``schema == "none"``), every
    ledger-specific literal used in the BQL (full account names, currency codes, account keywords) must be
    traceable to the question. Otherwise the model would be trained to guess facts it cannot know.
@@ -61,11 +60,10 @@ def main(paths: list[str]) -> int:
             n += 1
             ex = json.loads(line)
             msgs = ex.get("messages", [])
-            # A system message is optional (generate_dataset.py --no-system omits it).
-            if [m["role"] for m in msgs] not in (["system", "user", "assistant"], ["user", "assistant"]) or "meta" not in ex:
+            if [m["role"] for m in msgs] != ["user", "assistant"] or "meta" not in ex:
                 bad_structure.append(f"{path}:{lineno}")
                 continue
-            user, assistant = msgs[-2]["content"], msgs[-1]["content"]
+            user, assistant = msgs[0]["content"], msgs[1]["content"]
             for block in FENCE.findall(assistant):
                 try:
                     parser.parse(block)

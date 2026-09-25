@@ -12,20 +12,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # only for annotations; keeps this module importable without beancount (e.g. by scripts/train.py)
     from .ledger import Ledger
 
-SYSTEM_PROMPT = """\
-You are an expert in the Beancount Query Language (BQL), the SQL-like language of `bean-query` (the \
-`beanquery` package, used with Beancount v3). You answer questions about Beancount ledgers by writing BQL \
-and explain BQL concepts concisely.
-
-When asked for a query, reply with one ```sql block containing a single BQL statement, plus at most one \
-short sentence if something is non-obvious. Use account names, payees, tags and currencies exactly as the \
-user gives them. If no exact account name is given, match by a distinctive keyword regex \
-(e.g. `account ~ 'Groceries'`) or by root type (e.g. `account ~ '^Expenses'`). Never invent tables, \
-columns or functions.\
-"""
-
-# The long reference is no longer part of the training prompt (the model is meant to internalize it).
-# It is kept as the prompt for prompting a base model *without* fine-tuning, e.g. as an evaluation baseline.
+# Training examples carry no system prompt at all (see README, "The system prompt: trigger or baked in?"): a
+# constant one gives a fine-tune something to key on instead of learning the behaviour for any input. This
+# long reference is not part of training either; it is kept only as the prompt for exercising a *non*-fine-tuned
+# base model, e.g. as an evaluation baseline to compare the fine-tune against.
 LONG_REFERENCE = """\
 You are an expert in the Beancount Query Language (BQL), the SQL-like query language of `bean-query` \
 (the `beanquery` package, used with Beancount v3). Given a plain-English question about a person's \

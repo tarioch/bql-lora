@@ -20,7 +20,6 @@ import re
 from beanquery import query_compile, types
 
 from .executor import Executor, QueryError
-from .schema import SYSTEM_PROMPT
 
 FENCE = re.compile(r"```sql\n(.*?)\n```", re.S)
 
@@ -338,7 +337,6 @@ CONCEPTS: list[dict] = [
 def _example(rng: random.Random, question: str, answer: str, topic: str, kind: str) -> dict:
     return {
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": question},
             {"role": "assistant", "content": answer},
         ],

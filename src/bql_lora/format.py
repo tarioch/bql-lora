@@ -6,7 +6,7 @@ import random
 
 from .intents import Sample
 from .ledger import Ledger
-from .schema import SYSTEM_PROMPT, user_prompt
+from .schema import user_prompt
 
 ANSWER_STYLES = ["code_then_explain", "code_then_explain", "code_only", "explain_then_code", "code_then_explain"]
 
@@ -21,15 +21,12 @@ def assistant_message(rng: random.Random, sample: Sample) -> str:
     return f"{code}\n\n{sample.explanation}"
 
 
-def strip_system(example: dict) -> dict:
-    """The same example without its system message, for a model that should not depend on one."""
-    return {**example, "messages": [m for m in example["messages"] if m["role"] != "system"]}
-
-
 def build_example(rng: random.Random, ledger: Ledger, sample: Sample, mode: str = "full") -> dict:
+    # No system message: a constant one makes a fine-tune key on its presence rather than learning the behaviour
+    # for any input (see README, "The system prompt: trigger or baked in?"). Qwen's chat template supplies its own
+    # default system line for a conversation with none, which is what ollama/Modelfile bakes into the model.
     return {
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt(ledger, sample.question, mode)},
             {"role": "assistant", "content": assistant_message(rng, sample)},
         ],

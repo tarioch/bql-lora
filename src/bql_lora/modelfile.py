@@ -1,7 +1,12 @@
 """Render the Ollama Modelfile for a model fine-tuned on this dataset.
 
-The Modelfile is generated rather than hand-edited so the system prompt baked into the model cannot drift from
-the one the training data was built with (``schema.SYSTEM_PROMPT``).
+The Modelfile is generated rather than hand-edited so it cannot silently drift from what training actually used.
+
+Training examples carry no system message (see README, "The system prompt: trigger or baked in?"): a constant one
+gives a fine-tune something to key on instead of learning the behaviour for any input. Qwen's chat template
+supplies its own default system line for a conversation with none, which is what the model was trained with, so
+that line has to be the Modelfile's ``SYSTEM`` too (measured with ``check_system_prompt_sensitivity.py``: without
+it, only 1 of 8 test questions came back as BQL; with it, 8 of 8 did).
 
 Design notes, each learned the hard way:
 
@@ -16,21 +21,12 @@ Design notes, each learned the hard way:
 
 from __future__ import annotations
 
-from .schema import SYSTEM_PROMPT
-
 DEFAULT_GGUF = "qwen2.5-coder-7b-instruct.Q4_K_M.gguf"
 
-# Qwen's own default system message: what its chat template injects when a training example has none.
+# Qwen's own default system message: what its chat template injects for a conversation with no system message of
+# its own, at training time and at inference. The Modelfile has to bake this in explicitly, since Ollama's runtime
+# has no equivalent fallback of its own for a template (like ours) that does not reference `.System`.
 QWEN_DEFAULT_SYSTEM = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
-
-# Which system message the Modelfile bakes in. It has to match how the model was trained:
-#   qwen  Qwen's stock line (the default): Qwen's chat template injects it when a training example has no system
-#         message, which is what data/no-system/ (scripts/train.py's default) uses. Measured with
-#         check_system_prompt_sensitivity.py: 8/8 test questions answered in BQL, vs. 1/8 for a model trained WITH
-#         the system prompt and then run without one.
-#   bql   the training system prompt, for a model trained on data/ (with the prompt in every example)
-#   none  no system message at all
-SYSTEM_CHOICES = ("qwen", "bql", "none")
 
 # Plain ChatML as used by Qwen2.5: <|im_start|>role\ncontent<|im_end|>\n ... <|im_start|>assistant\n
 TEMPLATE = (
@@ -40,19 +36,12 @@ TEMPLATE = (
 )
 
 
-def render_modelfile(gguf: str = DEFAULT_GGUF, system: str = "qwen") -> str:
-    """The Modelfile text (LF line endings, trailing newline). ``system`` is one of ``SYSTEM_CHOICES``."""
-    if system not in SYSTEM_CHOICES:
-        raise ValueError(f"system must be one of {SYSTEM_CHOICES}, not {system!r}")
-    text = {"bql": SYSTEM_PROMPT, "qwen": QWEN_DEFAULT_SYSTEM, "none": None}[system]
-    if text is not None and '"""' in text:
-        raise ValueError("the system prompt contains a triple quote, which cannot be embedded in a Modelfile")
-    out = (
+def render_modelfile(gguf: str = DEFAULT_GGUF) -> str:
+    """The Modelfile text (LF line endings, trailing newline)."""
+    return (
         f"FROM {gguf}\n"
         f'TEMPLATE """{TEMPLATE}"""\n'
         "PARAMETER temperature 0\n"
         'PARAMETER stop "<|im_end|>"\n'
+        f'SYSTEM """{QWEN_DEFAULT_SYSTEM}"""\n'
     )
-    if text is not None:
-        out += f'SYSTEM """{text}"""\n'
-    return out

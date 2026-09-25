@@ -8,8 +8,7 @@ model learns is on the command line or printed, instead of hidden in a UI:
 
 Run it with the Python environment that has Unsloth installed, from anywhere:
 
-    python scripts/train.py                                 # data/no-system, 2 epochs
-    python scripts/train.py --data data --epochs 3          # the with-system-prompt variant
+    python scripts/train.py                                 # data/, 2 epochs
     python scripts/train.py --max-steps 2                   # smoke test: two optimizer steps
 
 Then bake the matching system message into the Modelfile and check the result (the commands are printed at the end).
@@ -33,8 +32,6 @@ import torch  # noqa: E402
 from datasets import Dataset  # noqa: E402
 from trl import SFTConfig, SFTTrainer  # noqa: E402
 
-from bql_lora.schema import SYSTEM_PROMPT  # noqa: E402
-
 DEFAULT_MODEL = "unsloth/qwen2.5-coder-7b-instruct-bnb-4bit"
 LORA_TARGETS = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
 # ChatML markers used by Qwen: the loss is computed only on what follows the assistant marker.
@@ -49,7 +46,7 @@ def read_examples(path: Path) -> list[list[dict]]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--data", type=Path, default=ROOT / "data" / "no-system", help="folder with train.jsonl and val.jsonl (default: data/no-system)")
+    ap.add_argument("--data", type=Path, default=ROOT / "data", help="folder with train.jsonl and val.jsonl (default: data)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--out", type=Path, default=ROOT / "outputs" / "bql-lora")
     ap.add_argument("--epochs", type=float, default=2.0)
@@ -85,11 +82,9 @@ def main() -> int:
     print("\n=== first training example, exactly as the model will see it ===")
     print(train_text[0])
     print("=== end of example ===\n")
-    has_system = train_msgs[0][0]["role"] == "system"
-    if has_system:
-        system_choice = "bql" if train_msgs[0][0]["content"] == SYSTEM_PROMPT else None
-    else:
-        system_choice = "qwen"  # the template injected Qwen's stock system line, see the printed example
+    if train_msgs[0][0]["role"] == "system":
+        print("WARNING: this data has a system message; ollama/Modelfile bakes in Qwen's default line and expects "
+              "training data to have none (see scripts/generate_dataset.py)", file=sys.stderr)
     lengths = sorted(len(ids) for ids in tokenizer(train_text, add_special_tokens=False)["input_ids"])
     p99 = lengths[int(len(lengths) * 0.99)]
     print(f"{len(train_text)} train / {len(val_text)} validation examples; tokens per example: median {lengths[len(lengths) // 2]}, "
@@ -129,7 +124,6 @@ def main() -> int:
     tokenizer.save_pretrained(str(adapter))
     (args.out / "training_config.json").write_text(json.dumps({
         "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-        "system_message_in_training_text": {"bql": "the training system prompt", "qwen": "Qwen's stock line", None: "unknown"}[system_choice],
         "train_loss": result.training_loss, "eval_loss": metrics["eval_loss"]}, indent=2), encoding="utf-8")
     print(f"saved the LoRA adapter to {adapter}")
     if args.merge:
@@ -138,7 +132,7 @@ def main() -> int:
         model.save_pretrained_gguf(str(args.out / "gguf"), tokenizer, quantization_method="q4_k_m")
 
     print("\nNext: export the merged model as a GGUF (Q4_K_M), then\n"
-          f"  python scripts/make_modelfile.py --system {system_choice or '<bql|qwen|none>'} --gguf <your.gguf> -o Modelfile\n"
+          "  python scripts/make_modelfile.py --gguf <your.gguf> -o Modelfile\n"
           "  ollama create bql -f Modelfile\n"
           "  python scripts/check_system_prompt_sensitivity.py --gguf <your.gguf>")
     return 0
