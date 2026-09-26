@@ -57,6 +57,14 @@ for why). The BQL reference that would otherwise have to go in a system prompt i
     (`subquery_in`).
   - A reference entry on a real reported pitfall: `last(balance)` grouped by account gives the *wrong* per-account
     total, because `balance` is one running total over the whole row set, not one per group; `sum(position)` is correct.
+- **A community beanquery manual** — an interactive [marimo notebook](https://molab.marimo.io/notebooks/nb_hht9waEQnsrjBSRp5ZKGPu/app)
+  by Evgeny E, pinned to the same beanquery commit this repo's `uv.lock` locks, with every shown query output actually
+  computed live rather than hand-typed. Cross-checked against the existing intents to find real gaps rather than
+  duplicating coverage. Patterns sourced this way so far:
+  - `x > ALL (subquery)` / `x < ANY (subquery)`, the way to test a value against every/at-least-one row a subquery
+    returns since beanquery has no scalar subqueries (`any_all_subquery`).
+  - The pattern-first `'pattern' ?~ field` match operator, whose default case-sensitivity is the *opposite* of `~`
+    (`txns_by_text`).
 - **Every statement is executed.** Ledgers are synthetic but loaded with the real `beancount.loader`; each generated
   query runs against its ledger with `beanquery`, and is dropped if it fails to parse, compile or run, or returns nothing.
   Every SQL block in the reference answers is executed too, and building fails if one doesn't run.

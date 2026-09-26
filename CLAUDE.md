@@ -70,6 +70,12 @@ plausible-looking pair. `scripts/audit_dataset.py`'s leak check specifically loo
 (account names, currencies, keyword regexes) in the BQL that aren't traceable to the question text, which catches
 the most common way a hand-written pair goes wrong.
 
+Whenever an intent (or a reference entry) is based on something read elsewhere — a mailing list thread, a
+third-party notebook, an issue tracker, anything not derived purely from `beanquery`'s own source/registry — record
+that source in README.md's "Where the knowledge comes from" section (see the existing mailing-list and molab-manual
+bullets for the format), not just in the commit message. That section is what lets a later change tell "generated
+from the live registry" apart from "read somewhere and needs to be re-checked when beanquery changes."
+
 ## Architecture: dataset -> Modelfile agreement
 
 `src/bql_lora/modelfile.py` generates `ollama/Modelfile` (via `scripts/make_modelfile.py`) — it's never hand-edited,

@@ -563,17 +563,23 @@ def txns_by_text(g: Gen) -> Sample:
     pat = f"(?i){w.lower()}" if ci else w
     field = rng.choice(["narration", "narration", "description"])
     neg = rng.random() < 0.15
-    op = "!~" if neg else "~"
+    # ?~ has no negated form (there is no !?~/?!~), so only offer the pattern-first order when not negating.
+    reversed_op = not neg and rng.random() < 0.2
     frm = None
+    match_expr = f"{q(pat)} ?~ {field}" if reversed_op else f"{field} {'!~' if neg else '~'} {q(pat)}"
     bql = select(["date", "narration", "account", "position"] if field == "narration" else ["date", "description", "account", "position"],
-                 where=[f"{field} {op} {q(pat)}"], order=["date"])
+                 where=[match_expr], order=["date"])
     verb = "do not mention" if neg else "mention"
     question = g.ask(f"Find all transactions whose {field} {verb}s '{w}'".replace("mentions", "mention").replace("dos not", "do not") if False else
                      (f"Show postings where the {field} does not contain '{w}'" if neg else f"Find all postings where the {field} contains '{w}'"),
                      (f"Everything except entries mentioning {w}" if neg else f"Search for '{w}' in the {field}"))
     if ci:
         question += " (case insensitive)"
-    expl = f"Regular expression {'non-' if neg else ''}match on {field}{' with (?i) for case-insensitivity' if ci else ''}."
+    if reversed_op:
+        expl = (f"'{pat}' ?~ {field} is {field} ~ '{pat}' with the pattern and string swapped; unlike ~, ?~ is "
+                f"case-sensitive by default{' (the (?i) here overrides that)' if ci else ''}.")
+    else:
+        expl = f"Regular expression {'non-' if neg else ''}match on {field}{' with (?i) for case-insensitivity' if ci else ''}."
     return Sample("txns_by_text", question, bql, expl, allow_empty=neg)
 
 
@@ -1447,6 +1453,37 @@ def subquery_in(g: Gen) -> Sample:
         question = g.ask("How many distinct payees are there?", "Count the unique payees")
         expl = "count(DISTINCT ...) is not supported; count the rows of a DISTINCT subquery instead."
     return Sample("subquery_in", question, bql, expl)
+
+
+@intent(2)
+def any_all_subquery(g: Gen) -> Sample:
+    """`x > ALL (subquery)` / `x < ANY (subquery)`: beanquery has no scalar subqueries (`number > (SELECT max(...))`
+    is rejected), so a quantified comparison is how you test a value against every/at-least-one row a subquery
+    returns. From the community beanquery manual (interactive notebook by Evgeny E, molab), which flags this as
+    the main reason to reach for ANY/ALL (with `=`, `x = ANY (...)` is just a wordier `x IN (...)`)."""
+    rng = g.rng
+    accs = g.accounts_of("Expenses")
+    if len(accs) < 2:
+        raise Skip
+    a, b = rng.sample(accs, 2)
+    ref_a, cond_a, _ = g.acct_pair(a)
+    ref_b, cond_b, _ = g.acct_pair(b)
+    inner = select("number", where=[cond_b, f"currency = '{g.base}'"], multiline=False)
+    tail = f" (in {g.base})"
+    variant = rng.choice(["gt_all", "lt_any"])
+    if variant == "gt_all":
+        bql = select(["date", "narration", "position"], where=[cond_a, f"currency = '{g.base}'", f"number > ALL({inner})"], order=["date"])
+        question = g.ask(f"Show postings on {ref_a} that are larger than every posting on {ref_b}{tail}",
+                         f"Which {ref_a} postings exceed all {ref_b} amounts{tail}?",
+                         f"List postings on {ref_a} bigger than the largest posting on {ref_b}{tail}")
+        expl = f"x > ALL (subquery) holds only when x exceeds every value the subquery returns; restricted to {g.base} postings so the comparison is between like currencies."
+    else:
+        bql = select(["date", "narration", "position"], where=[cond_a, f"currency = '{g.base}'", f"number < ANY({inner})"], order=["date"])
+        question = g.ask(f"Show postings on {ref_a} smaller than at least one posting on {ref_b}{tail}",
+                         f"Which {ref_a} postings are smaller than the biggest posting on {ref_b}{tail}?")
+        expl = (f"x < ANY (subquery) holds when x is smaller than at least one returned value, i.e. smaller than the largest one, not smaller than all of "
+                f"them; restricted to {g.base} postings so the comparison is between like currencies.")
+    return Sample("any_all_subquery", question, bql, expl, allow_empty=True)
 
 
 @intent(2)
