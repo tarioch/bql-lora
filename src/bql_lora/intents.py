@@ -1214,6 +1214,42 @@ def first_last(g: Gen) -> Sample:
 
 
 @intent(3)
+def last_activity(g: Gen) -> Sample:
+    """Last posting date per account, restricted to accounts that are still open. `close_date(account) IS NULL` is the
+    function form of the `close IS NULL` test that `accounts_table` does on `#accounts`, and works directly on the
+    postings table, so no join with `#accounts` is needed. Without GROUP BY, the non-aggregate column groups the rows."""
+    rng = g.rng
+    root = rng.choice(["Assets", "Assets", "Liabilities", "Expenses"])
+    if not g.accounts_of(root):
+        raise Skip
+    noun = {"Assets": "asset", "Liabilities": "liability", "Expenses": "expense"}[root]
+    variant = rng.choice(["last_date", "last_date", "oldest_first", "dormant"])
+    where = [f"account ~ '^{root}'", "close_date(account) IS NULL"]
+    if variant == "last_date":
+        bql = select(["account", "max(date) AS last_activity"], where=where)
+        question = g.ask(f"Show me the last transaction date for the {noun} accounts which are not yet closed",
+                         f"When was each open {noun} account last used?",
+                         f"Last posting date of every {noun} account that is still open")
+        expl = "close_date(account) IS NULL keeps only accounts without a close directive; max(date) gives the latest posting per account (the account column groups the rows)."
+    elif variant == "oldest_first":
+        bql = select(["account", "max(date) AS last_activity"], where=where, order=["last_activity"])
+        question = g.ask(f"List the open {noun} accounts by last transaction date, least recently used first",
+                         f"Which still-open {noun} accounts have been inactive the longest?")
+        expl = "Open accounts only (close_date(account) IS NULL), latest posting date per account, sorted so the longest-idle accounts come first."
+    else:
+        # Pick the cutoff from the data (just after one account's last posting) so the result is neither empty nor everything.
+        lasts = sorted({row[1] for row in g.ex.run(select(["account", "max(date)"], where=where)).rows})
+        if len(lasts) < 2:
+            raise Skip
+        cutoff = rng.choice(lasts[:-1]) + dt.timedelta(days=1)
+        bql = select(["account", "max(date) AS last_activity"], where=where, group="account", having=f"max(date) < {cutoff.isoformat()}", order=["last_activity"])
+        question = g.ask(f"Which open {noun} accounts have had no transactions since {cutoff.isoformat()}?",
+                         f"Show still-open {noun} accounts whose last posting is before {cutoff.isoformat()}")
+        expl = "HAVING filters on the per-account aggregate, so only open accounts whose most recent posting is older than the cutoff are listed."
+    return Sample("last_activity", question, bql, expl)
+
+
+@intent(3)
 def multi_account_txns(g: Gen) -> Sample:
     rng = g.rng
     tx = rng.choice([t for t in g.led.txns if len({p.account for p in t.postings}) >= 2])
