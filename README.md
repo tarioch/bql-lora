@@ -65,6 +65,9 @@ for why). The BQL reference that would otherwise have to go in a system prompt i
     returns since beanquery has no scalar subqueries (`any_all_subquery`).
   - The pattern-first `'pattern' ?~ field` match operator, whose default case-sensitivity is the *opposite* of `~`
     (`txns_by_text`).
+- **Manually added cases** — questions the model got wrong or that had no matching pattern, added by hand as intents.
+  So far: the last transaction date per still-open account, using `close_date(account) IS NULL` with `max(date)` on the
+  postings table (`last_activity`).
 - **Every statement is executed.** Ledgers are synthetic but loaded with the real `beancount.loader`; each generated
   query runs against its ledger with `beanquery`, and is dropped if it fails to parse, compile or run, or returns nothing.
   Every SQL block in the reference answers is executed too, and building fails if one doesn't run.
