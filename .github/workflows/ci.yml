@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the project
+        run: uv sync --locked
+
+      - name: Modelfile
+        run: |
+          uv run python scripts/make_modelfile.py --check
+          uv run python tests/test_modelfile.py
+
+      - name: Audit the committed dataset
+        run: uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
+
+      - name: Smoke test
+        run: uv run python tests/test_smoke.py
+
+  # the one check the main ruleset requires, so changing the jobs needs no settings change
+  ci-ok:
+    name: CI ok
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Check that all jobs succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "not all jobs succeeded: $RESULTS"
+              exit 1
+            fi
+          done

@@ -91,3 +91,8 @@ training data's message format, both sides of that agreement need to move togeth
 Changes to this repo go through a branch + PR (`git checkout -b ...`, push the branch, `gh pr create`), not direct
 commits to `main`. Open the PR, summarize what to look at, and stop — merge only when explicitly told to for that
 PR.
+
+`.github/workflows/ci.yml` runs the Modelfile checks, the dataset audit and the smoke test on every PR; its `CI ok`
+job is the check the `main` ruleset requires. Dependabot (`.github/dependabot.yml`) opens grouped PRs for Python
+packages weekly and GitHub Actions monthly; `.github/workflows/dependabot-automerge.yml` enables auto-merge on the
+minor and patch ones, so they merge once `CI ok` passes. Major updates stay manual.
