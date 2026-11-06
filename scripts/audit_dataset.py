@@ -2,7 +2,7 @@
 """Check a generated dataset (structure + ledger independence).
 
 1. Structure: every line is ``{"messages": [user, assistant], "meta": {...}}`` (no system message; see README,
-   "The system prompt: trigger or baked in?"), and every ```sql block in an assistant message parses as BQL.
+   "Why the data has no system prompt"), and every ```sql block in an assistant message parses as BQL.
 2. Leak audit: in ``text2bql`` examples whose prompt has no ledger information (``schema == "none"``), every
    ledger-specific literal used in the BQL (full account names, currency codes, account keywords) must be
    traceable to the question. Otherwise the model would be trained to guess facts it cannot know.

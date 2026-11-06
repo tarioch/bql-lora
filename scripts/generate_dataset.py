@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Generate a training set for fine-tuning an LLM on the Beancount Query Language (BQL) with Unsloth.
 
-Two kinds of examples are produced, neither carrying a system message (see README, "The system prompt: trigger or
-baked in?").
+Two kinds of examples are produced, neither carrying a system message (see README, "Why the data has no system
+prompt").
 
 * ``text2bql``: an English question -> one BQL statement. The prompt is the question alone, so the model never
   depends on a particular ledger's accounts. ``--schema-weights`` can mix in a compact account list or the full

@@ -25,8 +25,8 @@ Consequences of "must not depend on the ledger":
 - Nothing that is a hidden fact about the ledger appears in an answer. If the query filters on a currency, the
   question says which one (`... in CHF`). `scripts/audit_dataset.py` checks this on every schema-free example.
 
-Training examples carry no system message at all (see [The system prompt](#the-system-prompt-trigger-or-baked-in) below
-for why). The BQL reference that would otherwise have to go in a system prompt is kept as `LONG_REFERENCE` in
+Training examples carry no system message at all (see
+[Why the data has no system prompt](#why-the-data-has-no-system-prompt) below). The BQL reference that would otherwise have to go in a system prompt is kept as `LONG_REFERENCE` in
 [`schema.py`](src/bql_lora/schema.py), only for prompting a *non*-fine-tuned model as a baseline to compare against.
 
 ## Where the knowledge comes from
@@ -119,7 +119,7 @@ Each line of `data/train.jsonl` / `data/val.jsonl`:
 (estimated from character counts). `max_seq_length=1024` fits everything and 2048 leaves margin; there is no need for
 a model's maximum context (e.g. 32768), which needs far more VRAM.
 
-## The system prompt: trigger or baked in?
+## Why the data has no system prompt
 
 There isn't one, and that was a deliberate finding, not the starting design. A constant system prompt is the easiest
 feature for a fine-tune to key on instead of learning the behaviour for any input: an earlier version of this dataset
@@ -145,11 +145,8 @@ the model trains on. Measured the same way after retraining on it:
 | none | 7 of 8 (the one miss: a plain "how are you" correctly got a plain reply, not a forced query) |
 | an unrelated custom system prompt | 8 of 8 |
 
-So the Modelfile bakes in Qwen's stock line (`SYSTEM` has to be set explicitly: the stripped-down template it uses
-has no built-in fallback like Qwen's own template does), and training uses `data/` with no system message. The
-`unsloth-lora` skill records the system line the chat template rendered in its `run.json`, and the `ollama-model`
-skill writes exactly that line into the Modelfile, so the two cannot drift apart. There is no longer a choice to make
-here.
+So `data/` has no system message. Whatever serves the model has to send Qwen's default line when a request has none;
+the `ollama-model` skill bakes it into the Modelfile.
 
 ## Evaluation
 
@@ -194,7 +191,7 @@ Publish a GitHub release of this repo whenever a newly trained model is pushed.
 
 There is no trigger phrase and no system prompt to supply: send just the question as a user turn, at temperature 0.
 The Modelfile bakes in Qwen's default system line, matching training (see
-[The system prompt](#the-system-prompt-trigger-or-baked-in)); don't override it with a custom one.
+[Why the data has no system prompt](#why-the-data-has-no-system-prompt)); don't override it with a custom one.
 
 ```bash
 ollama run tarioch/qwen2.5-coder-bql "How much did I spend on groceries in 2024?"

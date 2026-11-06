@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # only for annotations; keeps this module importable without beancount
     from .ledger import Ledger
 
-# Not part of training either (see README, "The system prompt: trigger or baked in?"): kept only as the prompt
+# Not part of training either (see README, "Why the data has no system prompt"): kept only as the prompt
 # for exercising a *non*-fine-tuned base model, as an evaluation baseline to compare the fine-tune against.
 LONG_REFERENCE = """\
 You are an expert in the Beancount Query Language (BQL), the SQL-like query language of `bean-query` \

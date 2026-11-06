@@ -14,7 +14,7 @@ def _lines(path: Path) -> list[dict]:
 
 
 def test_training_data_has_no_system_message():
-    # See README, "The system prompt: trigger or baked in?": the chat template's default system line is what the
+    # See README, "Why the data has no system prompt": the chat template's default system line is what the
     # model trains on, and the skills' run.json records it for the Modelfile.
     for name in ("train.jsonl", "val.jsonl"):
         for row in _lines(ROOT / "data" / name):
