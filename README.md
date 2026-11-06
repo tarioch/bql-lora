@@ -183,9 +183,11 @@ There is no trigger phrase and no system prompt to supply — send just the ques
 
 ```python
 messages = [{"role": "user", "content": "How much did I spend on groceries in 2024?"}]
-inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt", return_dict=True).to("cuda")
+inputs = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt", return_dict=True).to(
+    "cuda"
+)
 out = model.generate(**inputs, max_new_tokens=300, do_sample=False)
-print(tokenizer.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True))
+print(tokenizer.decode(out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True))
 ```
 
 `apply_chat_template` fills in Qwen's own default system line for you, matching training (see
@@ -222,9 +224,16 @@ checks that the Modelfile, the code and the training data all agree. Details tha
 from unsloth import FastLanguageModel
 from datasets import load_dataset
 
-model, tokenizer = FastLanguageModel.from_pretrained("unsloth/Qwen2.5-Coder-7B-Instruct-bnb-4bit", max_seq_length=2048, load_in_4bit=True)
-model = FastLanguageModel.get_peft_model(model, r=32, lora_alpha=32, use_gradient_checkpointing="unsloth",
-                                         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"])
+model, tokenizer = FastLanguageModel.from_pretrained(
+    "unsloth/Qwen2.5-Coder-7B-Instruct-bnb-4bit", max_seq_length=2048, load_in_4bit=True
+)
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=32,
+    lora_alpha=32,
+    use_gradient_checkpointing="unsloth",
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+)
 
 ds = load_dataset("json", data_files={"train": "data/train.jsonl", "validation": "data/val.jsonl"})
 ds = ds.map(lambda ex: {"text": tokenizer.apply_chat_template(ex["messages"], tokenize=False)})

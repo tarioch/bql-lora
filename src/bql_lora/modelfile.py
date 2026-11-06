@@ -27,11 +27,7 @@ DEFAULT_GGUF = "qwen2.5-coder-7b-instruct.Q4_K_M.gguf"
 QWEN_DEFAULT_SYSTEM = "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
 
 # Plain ChatML as used by Qwen2.5: <|im_start|>role\ncontent<|im_end|>\n ... <|im_start|>assistant\n
-TEMPLATE = (
-    "{{- range .Messages }}<|im_start|>{{ .Role }}\n"
-    "{{ .Content }}<|im_end|>\n"
-    "{{ end }}<|im_start|>assistant\n"
-)
+TEMPLATE = "{{- range .Messages }}<|im_start|>{{ .Role }}\n{{ .Content }}<|im_end|>\n{{ end }}<|im_start|>assistant\n"
 
 
 def render_modelfile(gguf: str = DEFAULT_GGUF) -> str:

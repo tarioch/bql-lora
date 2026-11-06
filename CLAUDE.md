@@ -46,7 +46,26 @@ python scripts/train.py                                                   # full
 python scripts/export_gguf.py                                             # merge + quantize a trained adapter
 ```
 
-There is no linter or formatter configured in this repo; don't add one unasked.
+## Checks
+
+CI (`.github/workflows/ci.yml`) runs these on every pull request, all of them have to pass:
+
+```bash
+uv sync --locked --dev
+uv run pre-commit run --all-files   # ruff, ruff format, uv-lock, zizmor, whitespace/yaml/toml checks
+uv run pytest                       # both test files, CI uses the latest Python only
+uv run python scripts/make_modelfile.py --check
+uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
+```
+
+- `pre-commit run --all-files` only looks at files tracked by git, `git add` new files first.
+- Regenerate `uv.lock` with the uv version of the `uv-lock` pre-commit hook (`rev` in `.pre-commit-config.yaml`),
+  a different uv version rewrites unrelated parts of the file: `uvx --from uv==<rev> uv lock`.
+- The `CI ok` job fails unless all other jobs succeeded, it is the one check to require on `main`.
+- Dependabot PRs for minor and patch updates get auto-merge enabled (`.github/workflows/dependabot-automerge.yml`)
+  and merge once the required checks pass, major updates stay manual.
+- Lint fixes in `ledger.py`/`intents.py` must not change what the generator draws from its `random.Random`, or the
+  dataset changes: compare a small `generate_dataset.py --ledgers 30` run before and after.
 
 ## Architecture: the validate-by-execution pipeline
 
@@ -88,6 +107,7 @@ training data's message format, both sides of that agreement need to move togeth
 
 ## Workflow: PRs, not direct commits
 
-Changes to this repo go through a branch + PR (`git checkout -b ...`, push the branch, `gh pr create`), not direct
+Changes to this repo go through a branch + PR (`git checkout -b chore/...`, prefix `feature/`, `bugfix/` or
+`chore/`, which labels the PR, its `Label check` fails without one; push the branch, `gh pr create`), not direct
 commits to `main`. Open the PR, summarize what to look at, and stop — merge only when explicitly told to for that
 PR.

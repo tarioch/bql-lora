@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from bql_lora.executor import Executor, QueryError
-from bql_lora.intents import Gen, REGISTRY, Skip
+from bql_lora.intents import REGISTRY, Gen, Skip
 from bql_lora.ledger import generate_ledger
 from bql_lora.reference import build_reference_examples
 from bql_lora.schema import SCHEMA_MODES, user_prompt

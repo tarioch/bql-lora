@@ -1,0 +1,47 @@
+version: 2
+updates:
+  # beanquery is a git dependency (see CLAUDE.md) and not covered: `uv lock --upgrade` moves it on purpose
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - python:uv
+      - chore
+    groups:
+      python-dependencies:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - chore
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # hook revs in .pre-commit-config.yaml
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - chore
+    groups:
+      pre-commit-hooks:
+        patterns:
+          - "*"

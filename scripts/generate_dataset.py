@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from bql_lora.executor import Executor, QueryError  # noqa: E402
 from bql_lora.format import build_example  # noqa: E402
-from bql_lora.intents import Gen, REGISTRY, Skip  # noqa: E402
+from bql_lora.intents import REGISTRY, Gen, Skip  # noqa: E402
 from bql_lora.ledger import generate_ledger  # noqa: E402
 from bql_lora.reference import build_reference_examples  # noqa: E402
 from bql_lora.schema import SCHEMA_MODES  # noqa: E402
@@ -42,8 +42,15 @@ def normalize(bql: str) -> str:
     return " ".join(bql.split()).lower()
 
 
-def generate_for_ledger(ledger_seed: int, per_ledger: int, rng: random.Random, weights_by_mode: list[float],
-                        seen: set[tuple], bql_counts: Counter, counts: Counter) -> list[dict]:
+def generate_for_ledger(
+    ledger_seed: int,
+    per_ledger: int,
+    rng: random.Random,
+    weights_by_mode: list[float],
+    seen: set[tuple],
+    bql_counts: Counter,
+    counts: Counter,
+) -> list[dict]:
     ledger = generate_ledger(ledger_seed)
     ex = Executor(ledger)
     gen = Gen(ledger, ex, rng, "full")
@@ -90,9 +97,19 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ledgers", type=int, default=350, help="number of distinct synthetic ledgers to generate")
     ap.add_argument("--per-ledger", type=int, default=18, help="target number of accepted text2bql examples per ledger")
-    ap.add_argument("--schema-weights", type=float, nargs=3, default=[1.0, 0.0, 0.0], metavar=("NONE", "COMPACT", "FULL"),
-                    help="share of text2bql examples whose prompt has no ledger info / a compact account list / the full schema (default: question only)")
-    ap.add_argument("--no-reference", action="store_true", help="skip the BQL reference (tables/columns/functions/concepts) examples")
+    ap.add_argument(
+        "--schema-weights",
+        type=float,
+        nargs=3,
+        default=[1.0, 0.0, 0.0],
+        metavar=("NONE", "COMPACT", "FULL"),
+        help="share of text2bql examples whose prompt has no ledger info / a compact account list / the full schema (default: question only)",
+    )
+    ap.add_argument(
+        "--no-reference",
+        action="store_true",
+        help="skip the BQL reference (tables/columns/functions/concepts) examples",
+    )
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--out", type=Path, default=Path("data"))
     ap.add_argument("--val-fraction", type=float, default=0.04)
@@ -109,7 +126,9 @@ def main() -> None:
         ledger_seed = master_rng.randrange(1 << 30)
         rng = random.Random(ledger_seed ^ 0x5EED)
         try:
-            batch = generate_for_ledger(ledger_seed, args.per_ledger, rng, args.schema_weights, seen, bql_counts, counts)
+            batch = generate_for_ledger(
+                ledger_seed, args.per_ledger, rng, args.schema_weights, seen, bql_counts, counts
+            )
         except Exception as e:
             print(f"[ledger-error] seed={ledger_seed}: {e}", file=sys.stderr)
             continue
@@ -137,7 +156,10 @@ def main() -> None:
     dump(args.out / "val.jsonl", val)
 
     print(f"\nTotal examples: {len(examples)}  (train={len(train)}, val={len(val)}); reference examples: {n_reference}")
-    print("text2bql prompt style:", dict(Counter(e["meta"]["schema"] for e in examples if e["meta"]["task"] == "text2bql")))
+    print(
+        "text2bql prompt style:",
+        dict(Counter(e["meta"]["schema"] for e in examples if e["meta"]["task"] == "text2bql")),
+    )
     print("text2bql by intent:")
     for name, n in counts.most_common():
         print(f"  {name:24s} {n}")

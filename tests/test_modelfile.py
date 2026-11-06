@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from bql_lora.modelfile import QWEN_DEFAULT_SYSTEM, render_modelfile
+from bql_lora.modelfile import QWEN_DEFAULT_SYSTEM, render_modelfile  # noqa: E402
 
 
 def _system_value(text: str):
@@ -52,7 +52,9 @@ def test_training_data_has_no_system_message():
     for name in ("train.jsonl", "val.jsonl"):
         with open(ROOT / "data" / name, encoding="utf-8") as f:
             for line in f:
-                assert [m["role"] for m in json.loads(line)["messages"]] == ["user", "assistant"], f"data/{name} has a system message"
+                assert [m["role"] for m in json.loads(line)["messages"]] == ["user", "assistant"], (
+                    f"data/{name} has a system message"
+                )
 
 
 if __name__ == "__main__":

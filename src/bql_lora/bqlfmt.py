@@ -22,10 +22,19 @@ def cond(parts: list[str] | None) -> str | None:
     return " AND ".join(parts)
 
 
-def select(targets: list[str] | str, *, frm: str | None = None, where: list[str] | str | None = None,
-           group: list[str] | str | None = None, having: str | None = None,
-           order: list[str] | str | None = None, pivot: str | None = None,
-           limit: int | None = None, distinct: bool = False, multiline: bool | None = None) -> str:
+def select(
+    targets: list[str] | str,
+    *,
+    frm: str | None = None,
+    where: list[str] | str | None = None,
+    group: list[str] | str | None = None,
+    having: str | None = None,
+    order: list[str] | str | None = None,
+    pivot: str | None = None,
+    limit: int | None = None,
+    distinct: bool = False,
+    multiline: bool | None = None,
+) -> str:
     if isinstance(targets, list):
         targets = ", ".join(targets)
     if isinstance(where, str):
