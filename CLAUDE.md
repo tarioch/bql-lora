@@ -53,7 +53,7 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request, all of them ha
 ```bash
 uv sync --locked --dev
 uv run pre-commit run --all-files   # ruff, ruff format, uv-lock, zizmor, whitespace/yaml/toml checks
-uv run pytest                       # both test files, Python 3.10 to 3.14
+uv run pytest                       # both test files, CI uses the latest Python only
 uv run python scripts/make_modelfile.py --check
 uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
 ```
@@ -62,6 +62,8 @@ uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
 - Regenerate `uv.lock` with the uv version of the `uv-lock` pre-commit hook (`rev` in `.pre-commit-config.yaml`),
   a different uv version rewrites unrelated parts of the file: `uvx --from uv==<rev> uv lock`.
 - The `CI ok` job fails unless all other jobs succeeded, it is the one check to require on `main`.
+- Dependabot PRs for minor and patch updates get auto-merge enabled (`.github/workflows/dependabot-automerge.yml`)
+  and merge once the required checks pass, major updates stay manual.
 - Lint fixes in `ledger.py`/`intents.py` must not change what the generator draws from its `random.Random`, or the
   dataset changes: compare a small `generate_dataset.py --ledgers 30` run before and after.
 
