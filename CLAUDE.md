@@ -64,6 +64,9 @@ uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
 - The `CI ok` job fails unless all other jobs succeeded, it is the one check to require on `main`.
 - Dependabot PRs for minor and patch updates get auto-merge enabled (`.github/workflows/dependabot-automerge.yml`)
   and merge once the required checks pass, major updates stay manual.
+- Release notes are drafted by release-drafter (`.github/workflows/release-drafter.yml`, config from the shared
+  `release-drafter.yml` of tarioch/.github) on every push to `main`, the PR label decides the category. Publishing the
+  draft creates the `vX.Y.Z` tag. Publish a release whenever a newly trained model is pushed to Ollama.
 - Lint fixes in `ledger.py`/`intents.py` must not change what the generator draws from its `random.Random`, or the
   dataset changes: compare a small `generate_dataset.py --ledgers 30` run before and after.
 
