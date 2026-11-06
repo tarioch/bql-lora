@@ -69,11 +69,11 @@ jobs:
       - name: Install the project
         run: uv sync --locked
 
-      - name: Check that the Modelfile is up to date
-        run: uv run python scripts/make_modelfile.py --check
-
       - name: Audit the committed dataset
         run: uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
+
+      - name: Audit the evaluation set
+        run: uv run python scripts/audit_dataset.py eval/eval.jsonl
 
   # one check to require on main, so changing the jobs needs no settings change
   ci-ok:

@@ -1,8 +1,0 @@
-FROM qwen2.5-coder-7b-instruct.Q4_K_M.gguf
-TEMPLATE """{{- range .Messages }}<|im_start|>{{ .Role }}
-{{ .Content }}<|im_end|>
-{{ end }}<|im_start|>assistant
-"""
-PARAMETER temperature 0
-PARAMETER stop "<|im_end|>"
-SYSTEM """You are Qwen, created by Alibaba Cloud. You are a helpful assistant."""

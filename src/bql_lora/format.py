@@ -22,7 +22,7 @@ def assistant_message(rng: random.Random, sample: Sample) -> str:
 
 
 def build_example(rng: random.Random, ledger: Ledger, sample: Sample, mode: str = "full") -> dict:
-    # No system message (see README, "The system prompt: trigger or baked in?").
+    # No system message (see README, "Why the data has no system prompt").
     return {
         "messages": [
             {"role": "user", "content": user_prompt(ledger, sample.question, mode)},
