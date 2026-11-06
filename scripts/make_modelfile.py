@@ -21,9 +21,15 @@ from bql_lora.modelfile import DEFAULT_GGUF, render_modelfile  # noqa: E402
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--gguf", default=DEFAULT_GGUF, help="GGUF file the Modelfile's FROM line points at (default: %(default)s)")
+    ap.add_argument(
+        "--gguf", default=DEFAULT_GGUF, help="GGUF file the Modelfile's FROM line points at (default: %(default)s)"
+    )
     ap.add_argument("-o", "--out", type=Path, default=ROOT / "ollama" / "Modelfile")
-    ap.add_argument("--check", action="store_true", help="do not write; fail if the file on disk differs from what would be generated")
+    ap.add_argument(
+        "--check",
+        action="store_true",
+        help="do not write; fail if the file on disk differs from what would be generated",
+    )
     args = ap.parse_args()
 
     text = render_modelfile(args.gguf)

@@ -76,8 +76,10 @@ def main(paths: list[str]) -> int:
                 if found:
                     bad_leaks.append((f"{path}:{lineno}", found, user, meta["bql"]))
 
-    print(f"{n} examples ({n_none} schema-free text2bql); structure errors: {len(bad_structure)}, "
-          f"unparsable BQL blocks: {len(bad_parse)}, ledger leaks: {len(bad_leaks)}")
+    print(
+        f"{n} examples ({n_none} schema-free text2bql); structure errors: {len(bad_structure)}, "
+        f"unparsable BQL blocks: {len(bad_parse)}, ledger leaks: {len(bad_leaks)}"
+    )
     for where in bad_structure[:5]:
         print("  structure:", where)
     for where, block, err in bad_parse[:5]:

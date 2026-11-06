@@ -64,7 +64,9 @@ class Executor:
 
     def __init__(self, ledger: Ledger):
         self.ledger = ledger
-        self.conn = beanquery.connect("beancount:", entries=ledger.entries, errors=ledger.errors, options=ledger.options)
+        self.conn = beanquery.connect(
+            "beancount:", entries=ledger.entries, errors=ledger.errors, options=ledger.options
+        )
 
     def run(self, statement: str) -> Result:
         with fixed_today(self.ledger.today):

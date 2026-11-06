@@ -143,8 +143,7 @@ def render_ledger_schema(ledger: Ledger) -> str:
 
 def render_compact_schema(ledger: Ledger) -> str:
     """Just the operating currency and a flat account list: the minimum a user might reasonably paste in."""
-    return (f"Operating currency: {ledger.base}.\n"
-            f"Accounts: {', '.join(sorted(ledger.accounts))}")
+    return f"Operating currency: {ledger.base}.\nAccounts: {', '.join(sorted(ledger.accounts))}"
 
 
 SCHEMA_MODES = ("none", "compact", "full")

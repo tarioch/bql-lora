@@ -27,7 +27,12 @@ from unsloth import FastLanguageModel  # noqa: E402
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--adapter", type=Path, default=ROOT / "outputs" / "bql-lora" / "adapter", help="the LoRA adapter directory saved by train.py")
+    ap.add_argument(
+        "--adapter",
+        type=Path,
+        default=ROOT / "outputs" / "bql-lora" / "adapter",
+        help="the LoRA adapter directory saved by train.py",
+    )
     ap.add_argument("--out", type=Path, default=None, help="default: <adapter's parent>/gguf")
     ap.add_argument("--quant", default="q4_k_m", help="llama.cpp quantization method (default: %(default)s)")
     ap.add_argument("--max-seq-length", type=int, default=1024)
@@ -39,7 +44,9 @@ def main() -> int:
     out = args.out or args.adapter.parent / "gguf"
 
     print(f"loading {args.adapter} ...")
-    model, tokenizer = FastLanguageModel.from_pretrained(str(args.adapter), max_seq_length=args.max_seq_length, dtype=None, load_in_4bit=True)
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        str(args.adapter), max_seq_length=args.max_seq_length, dtype=None, load_in_4bit=True
+    )
 
     print(f"merging and exporting {args.quant} GGUF to {out} ...")
     result = model.save_pretrained_gguf(str(out), tokenizer, quantization_method=args.quant)
@@ -53,10 +60,12 @@ def main() -> int:
 
     gguf = gguf_files[0]
     print(f"\nwrote {gguf} ({gguf.stat().st_size / 2**30:.2f} GiB)")
-    print("\nNext:\n"
-          f'  python scripts/make_modelfile.py --gguf "{gguf}" -o Modelfile\n'
-          "  ollama create bql -f Modelfile\n"
-          '  ollama run bql "How much did I spend on groceries in 2024?"')
+    print(
+        "\nNext:\n"
+        f'  python scripts/make_modelfile.py --gguf "{gguf}" -o Modelfile\n'
+        "  ollama create bql -f Modelfile\n"
+        '  ollama run bql "How much did I spend on groceries in 2024?"'
+    )
     return 0
 
 
