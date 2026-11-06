@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from bql_lora.executor import Executor, QueryError  # noqa: E402
 from bql_lora.format import build_example  # noqa: E402
-from bql_lora.intents import Gen, REGISTRY, Skip  # noqa: E402
+from bql_lora.intents import REGISTRY, Gen, Skip  # noqa: E402
 from bql_lora.ledger import generate_ledger  # noqa: E402
 from bql_lora.reference import build_reference_examples  # noqa: E402
 from bql_lora.schema import SCHEMA_MODES  # noqa: E402

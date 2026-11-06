@@ -29,6 +29,8 @@ sys.path.insert(0, str(ROOT / "src"))
 from unsloth import FastLanguageModel, is_bfloat16_supported  # noqa: E402
 from unsloth.chat_templates import train_on_responses_only  # noqa: E402
 
+# isort: split
+
 import torch  # noqa: E402
 from datasets import Dataset  # noqa: E402
 from trl import SFTConfig, SFTTrainer  # noqa: E402
@@ -110,7 +112,7 @@ def main() -> int:
     first = trainer.train_dataset[0]
     if "labels" in first:
         # Proof of what the loss is computed on: labels are -100 everywhere the model is not trained.
-        supervised = [t for t, label in zip(first["input_ids"], first["labels"]) if label != -100]
+        supervised = [t for t, label in zip(first["input_ids"], first["labels"], strict=True) if label != -100]
         print(f"=== the {len(supervised)} of {len(first['input_ids'])} tokens of the first example that receive loss ===")
         print(tokenizer.decode(supervised))
         print("=== end ===\n")

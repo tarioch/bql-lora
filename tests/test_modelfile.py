@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from bql_lora.modelfile import QWEN_DEFAULT_SYSTEM, render_modelfile
+from bql_lora.modelfile import QWEN_DEFAULT_SYSTEM, render_modelfile  # noqa: E402
 
 
 def _system_value(text: str):

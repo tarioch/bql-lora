@@ -6,7 +6,7 @@ import calendar
 import datetime as dt
 import random
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 MONTHS = list(calendar.month_name)[1:]
 ORD = {1: "first", 2: "second", 3: "third", 4: "fourth"}

@@ -10,15 +10,32 @@ from __future__ import annotations
 import datetime as dt
 import random
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from . import nl
 from .bqlfmt import cond, q, select
 from .executor import Executor, QueryError
 from .ledger import Ledger
-from .nl import (Period, human_list, natural_name, p_after, p_asof, p_before, p_between, p_last_days, p_last_month,
-                 p_last_months, p_last_weeks, p_last_year, p_month, p_quarter, p_since, p_this_month, p_this_year, p_year, pick, polish)
+from .nl import (
+    Period,
+    natural_name,
+    p_before,
+    p_between,
+    p_last_days,
+    p_last_month,
+    p_last_months,
+    p_last_weeks,
+    p_last_year,
+    p_month,
+    p_quarter,
+    p_since,
+    p_this_month,
+    p_this_year,
+    p_year,
+    pick,
+    polish,
+)
 
 
 @dataclass
@@ -569,7 +586,6 @@ def txns_by_text(g: Gen) -> Sample:
     neg = rng.random() < 0.15
     # ?~ has no negated form (there is no !?~/?!~), so only offer the pattern-first order when not negating.
     reversed_op = not neg and rng.random() < 0.2
-    frm = None
     match_expr = f"{q(pat)} ?~ {field}" if reversed_op else f"{field} {'!~' if neg else '~'} {q(pat)}"
     bql = select(["date", "narration", "account", "position"] if field == "narration" else ["date", "description", "account", "position"],
                  where=[match_expr], order=["date"])
@@ -1508,7 +1524,7 @@ def utility_scalars(g: Gen) -> Sample:
 def string_functions(g: Gen) -> Sample:
     rng = g.rng
     variant = rng.choice(["upper", "maxwidth", "grep", "leaf", "root", "parent", "splitcomp", "substr"])
-    a = rng.choice(g.used)
+    rng.choice(g.used)  # unused, but drawing it keeps the random sequence (and so the dataset) unchanged
     if variant == "upper":
         bql = select(["date", "upper(payee) AS payee"], frm="#transactions", where=["payee IS NOT NULL"], order=["date DESC"], limit=10)
         question = g.ask("Show the 10 latest payees in upper case", "Latest 10 transactions with the payee converted to uppercase")
@@ -1616,7 +1632,6 @@ def travel_trips(g: Gen) -> Sample:
 
 @intent(2)
 def cast_and_meta(g: Gen) -> Sample:
-    rng = g.rng
     keys = g.led.txn_meta_keys
     if "invoice" in keys:
         bql = select(["date", "payee", "entry_meta('invoice') AS invoice"], where=["entry_meta('invoice') IS NOT NULL"], order=["date"], distinct=True)

@@ -16,7 +16,6 @@ from decimal import Decimal
 from beancount import loader
 from beancount.core import data
 
-
 # --------------------------------------------------------------------------
 # Catalogs
 
@@ -444,9 +443,8 @@ class LedgerBuilder:
             self._txn(open_date, "Lender", "Loan disbursement", [(self.a_checking, loan_balance, self.base, "", {}), (self.a_loan, -loan_balance, self.base, "", {})])
         while month <= end:
             def day(n: int) -> dt.date:
-                return month + dt.timedelta(days=min(n, 27))
+                return month + dt.timedelta(days=min(n, 27))  # noqa: B023 (only called within the iteration)
             y, m = month.year, month.month
-            tag_month = []
             # salary
             gross = salary
             tax = money(gross * Decimal("0.18")) if self.e_tax else Decimal(0)
@@ -478,7 +476,7 @@ class LedgerBuilder:
                 client = rng.choice(BUSINESS_CLIENTS)
                 self.link_counter += 1
                 meta = {"invoice": f"INV-{y}-{self.link_counter:03d}"} if self.use_meta else {}
-                self._txn(day(rng.randint(5, 20)), client, f"Consulting invoice", [(self.a_checking, fee, self.base, "", {}), (self.i_other, -fee, self.base, "", {})],
+                self._txn(day(rng.randint(5, 20)), client, "Consulting invoice", [(self.a_checking, fee, self.base, "", {}), (self.i_other, -fee, self.base, "", {})],
                           links=[f"invoice-{y}-{self.link_counter:03d}"], tags=["business"] if self.use_tags else None, meta=meta)
             # rent and fixed bills
             if "rent" in self.categories:
@@ -625,7 +623,6 @@ class LedgerBuilder:
         return self.a_card if self.a_card and self.rng.random() < 0.6 else self.a_checking
 
     def _render(self) -> str:
-        rng = self.rng
         # balance assertions: emitted on the 1st of some months, using the sim balances at that point
         by_month_end = self._balance_assertions()
         items: list[tuple[dt.date, int, str]] = list(self.directives) + by_month_end
@@ -690,7 +687,7 @@ class Ledger:
     txns: list = field(default_factory=list)
 
     @classmethod
-    def load(cls, text: str, today: dt.date, base: str) -> "Ledger":
+    def load(cls, text: str, today: dt.date, base: str) -> Ledger:
         entries, errors, options = loader.load_string(text)
         led = cls(text, entries, errors, options, today, base)
         led._derive()
