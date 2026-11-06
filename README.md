@@ -154,6 +154,7 @@ Unsloth Studio, the interpreter under `~/.unsloth/studio/unsloth_studio`); it do
 ```bash
 python scripts/train.py --max-steps 2     # smoke test: two optimizer steps, then evaluate and save
 python scripts/train.py                    # data/, 2 epochs
+python scripts/train.py --resume           # continue from the latest checkpoint (saved every 100 steps) after a crash
 ```
 
 Defaults: LoRA rank 32 on all attention and MLP projections, learning rate 2e-4, effective batch 16 (4 x 4), 8-bit AdamW,

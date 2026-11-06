@@ -10,6 +10,7 @@ Run it with the Python environment that has Unsloth installed, from anywhere:
 
     python scripts/train.py                                 # data/, 2 epochs
     python scripts/train.py --max-steps 2                   # smoke test: two optimizer steps
+    python scripts/train.py --resume                        # continue from the latest checkpoint after a crash
 
 Then bake the matching system message into the Modelfile and check the result (the commands are printed at the end).
 """
@@ -57,6 +58,8 @@ def main() -> int:
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--rank", type=int, default=32, help="LoRA rank (alpha is set equal to it)")
     ap.add_argument("--eval-steps", type=int, default=100)
+    ap.add_argument("--save-steps", type=int, default=100, help="save a checkpoint to <out>/checkpoints every this many steps (the last 2 are kept)")
+    ap.add_argument("--resume", action="store_true", help="continue from the latest checkpoint in <out>/checkpoints, e.g. after a crash")
     ap.add_argument("--seed", type=int, default=3407)
     ap.add_argument("--no-response-only", action="store_true", help="also train on the question and system tokens (not recommended)")
     ap.add_argument("--merge", action="store_true", help="also save a merged 16-bit model (about 15 GB)")
@@ -99,7 +102,7 @@ def main() -> int:
         per_device_train_batch_size=args.batch_size, per_device_eval_batch_size=args.batch_size, gradient_accumulation_steps=args.grad_accum,
         num_train_epochs=args.epochs, max_steps=args.max_steps, learning_rate=args.lr, lr_scheduler_type="linear", warmup_steps=0.03,  # a float below 1 means 3% of all steps
         weight_decay=0.01, optim="adamw_8bit", bf16=bf16, fp16=not bf16, logging_steps=10, eval_strategy="steps", eval_steps=args.eval_steps,
-        save_strategy="no", report_to="none", seed=args.seed)
+        save_strategy="steps", save_steps=args.save_steps, save_total_limit=2, report_to="none", seed=args.seed)
     trainer = SFTTrainer(model=model, processing_class=tokenizer, args=config,
                          train_dataset=Dataset.from_dict({"text": train_text}), eval_dataset=Dataset.from_dict({"text": val_text}))
     if not args.no_response_only:
@@ -112,7 +115,7 @@ def main() -> int:
         print(tokenizer.decode(supervised))
         print("=== end ===\n")
 
-    result = trainer.train()
+    result = trainer.train(resume_from_checkpoint=True if args.resume else None)
     metrics = trainer.evaluate()
     print(f"\ntrain loss {result.training_loss:.4f}   validation loss {metrics['eval_loss']:.4f}")
     if torch.cuda.is_available():
