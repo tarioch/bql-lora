@@ -67,7 +67,10 @@ for why). The BQL reference that would otherwise have to go in a system prompt i
     (`txns_by_text`).
 - **Manually added cases** — questions the model got wrong or that had no matching pattern, added by hand as intents.
   So far: the last transaction date per still-open account, using `close_date(account) IS NULL` with `max(date)` on the
-  postings table (`last_activity`).
+  postings table (`last_activity`); and the last entry per account among accounts used in a recent window (this year,
+  the last 12 months, ...) whose latest entry is still older than a relative cutoff ("... that did have an entry this
+  year, but older than 2 months"), using the window in `WHERE` and `HAVING max(date) < today() - interval('2 months')`
+  (`last_entry_window`).
 - **Every statement is executed.** Ledgers are synthetic but loaded with the real `beancount.loader`; each generated
   query runs against its ledger with `beanquery`, and is dropped if it fails to parse, compile or run, or returns nothing.
   Every SQL block in the reference answers is executed too, and building fails if one doesn't run.

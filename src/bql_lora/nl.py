@@ -107,6 +107,24 @@ def p_last_days(n: int) -> Period:
         label=f"in the last {n} days", kind="relative")
 
 
+def p_last_months(n: int) -> Period:
+    """A rolling window of n months (or, for n = 12, a year). interval() steps by calendar months, which date_add() can't."""
+    span = "12 months" if n == 12 else f"{n} month{'s' if n > 1 else ''}"
+    nl = [f"in the last {span}", f"over the past {span}", f"during the last {span}"] if n > 1 else ["in the last month", "over the past month"]
+    if n == 12:
+        nl += ["in the past year", "over the last year"]
+    iv = "1 year" if n == 12 else span
+    cond = f"date >= today() - interval('{iv}')"
+    return Period(nl=nl, forms=[{"where": [cond]}], tforms=[{"where": [cond]}], label=f"in the last {span}", kind="relative")
+
+
+def p_last_weeks(n: int) -> Period:
+    """interval() supports only days, months and years, so weeks are written as days."""
+    cond = f"date >= today() - interval('{7 * n} days')"
+    return Period(nl=[f"in the last {n} weeks", f"over the past {n} weeks"], forms=[{"where": [cond]}], tforms=[{"where": [cond]}],
+                  label=f"in the last {n} weeks", kind="relative")
+
+
 def p_this_year() -> Period:
     return Period(nl=["this year", "in the current year", "so far this year", "year to date"],
                   forms=[{"where": ["year = year(today())"]}, {"where": [], "frm": "year = year(today())"}],
