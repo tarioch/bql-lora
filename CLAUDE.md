@@ -5,19 +5,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 A generator for a chat-format training dataset (`data/train.jsonl` / `data/val.jsonl`) used to fine-tune a small LLM
-on the Beancount Query Language (BQL, via the `beanquery` package for Beancount v3), plus the scripts to train it
-with Unsloth and package the result for Ollama. See [README.md](README.md) for the full picture (what's trained,
+on the Beancount Query Language (BQL, via the `beanquery` package for Beancount v3), and a held-out evaluation set
+with a check that runs the model's query. Training, GGUF export, the Ollama Modelfile, evaluation runs and publishing
+use the `unsloth-lora` and `ollama-model` skills of the llm-finetune plugin (tarioch/llm-finetune-skills, enabled in
+`.claude/settings.json`); this repo has no training code of its own. See [README.md](README.md) for the full picture (what's trained,
 why there's no system prompt, the mailing-list-sourced intents, limits). Don't duplicate that here — this file is
 about working in the code, not the training design.
 
 ## Two separate Python environments
 
 - **This repo's own environment** (`uv sync`): `beancount` + `beanquery`, no GPU needed. Used for
-  `generate_dataset.py`, `audit_dataset.py`, and both test files.
-- **A separate GPU environment with Unsloth installed**, not a dependency of this repo (it isn't in
-  `pyproject.toml` on purpose — it needs a specific CUDA/torch stack and doesn't belong on a
-  machine just auditing or regenerating the dataset). Only `scripts/train.py` and `scripts/export_gguf.py` need it;
-  both run fine without `beancount`/`beanquery` installed at all (they only read pre-built `.jsonl` files).
+  `generate_dataset.py`, `generate_eval.py`, `audit_dataset.py`, the tests, and for running the `ollama-model`
+  skill's `evaluate.py` with `--check scripts/eval_check.py:same_rows` (the check executes queries with beanquery).
+- **The Unsloth environment** on the GPU machine, for the `unsloth-lora` skill's scripts. Not a dependency of this
+  repo (it needs a specific CUDA/torch stack). Those scripts only read `data/*.jsonl`.
 
 `beanquery` is pinned to `git+https://github.com/beancount/beanquery.git` (git HEAD), not the PyPI release: the
 `HAVING`/`PIVOT BY` support and several functions this dataset exercises aren't in PyPI's `0.2.0`. Don't "fix" this
@@ -30,21 +31,15 @@ run `uv lock --upgrade` to intentionally move to a newer `beanquery` HEAD (and `
 uv sync                                                                    # this repo's own deps (no GPU)
 
 uv run python scripts/generate_dataset.py --ledgers 350 --per-ledger 18 --seed 1 --out data   # regenerate data/
+uv run python scripts/generate_eval.py --data data --out eval/eval.jsonl                      # then the eval set
 uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl                        # structure + parses + no ledger leaks
 
-uv run python tests/test_modelfile.py                                     # or: uv run pytest tests/test_modelfile.py
-uv run python tests/test_smoke.py                                         # every intent, every prompt mode (~3 min)
-# a single test: uv run pytest tests/test_smoke.py::test_all_intents_fire_and_validate_in_every_mode -q
-# (neither file needs pytest to run: python <file>.py runs every test_* in it and prints "ok")
-
-uv run python scripts/make_modelfile.py --check                           # fails if ollama/Modelfile is stale
-uv run python scripts/make_modelfile.py                                   # regenerate it
-
-# needs the separate Unsloth/GPU environment:
-python scripts/train.py --max-steps 2                                     # smoke test: 2 optimizer steps
-python scripts/train.py                                                   # full run, data/, 2 epochs
-python scripts/export_gguf.py                                             # merge + quantize a trained adapter
+uv run pytest tests/test_evaluation.py                                    # data/eval agreement and the eval check
+uv run pytest tests/test_smoke.py                                         # every intent, every prompt mode (~3 min)
 ```
+
+Training and publishing follow the skills (README, "Training and publishing"). Ask before using the GPU machine or
+starting a full training run, and before pushing to ollama.com.
 
 ## Checks
 
@@ -53,9 +48,9 @@ CI (`.github/workflows/ci.yml`) runs these on every pull request, all of them ha
 ```bash
 uv sync --locked --dev
 uv run pre-commit run --all-files   # ruff, ruff format, uv-lock, zizmor, whitespace/yaml/toml checks
-uv run pytest                       # both test files, CI uses the latest Python only
-uv run python scripts/make_modelfile.py --check
+uv run pytest                       # CI uses the latest Python only
 uv run python scripts/audit_dataset.py data/train.jsonl data/val.jsonl
+uv run python scripts/audit_dataset.py eval/eval.jsonl
 ```
 
 - `pre-commit run --all-files` only looks at files tracked by git, `git add` new files first.
@@ -98,15 +93,15 @@ that source in README.md's "Where the knowledge comes from" section (see the exi
 bullets for the format), not just in the commit message. That section is what lets a later change tell "generated
 from the live registry" apart from "read somewhere and needs to be re-checked when beanquery changes."
 
-## Architecture: dataset -> Modelfile agreement
+## Architecture: dataset -> evaluation -> Modelfile agreement
 
-`src/bql_lora/modelfile.py` generates `ollama/Modelfile` (via `scripts/make_modelfile.py`) — it's never hand-edited,
-because it has to agree with what training actually used: no system message in the data (Qwen's chat template
-fills in its own default at training time), so the Modelfile bakes that same default line into `SYSTEM` explicitly.
-`tests/test_modelfile.py` checks the committed file matches the generator's output and that everything is LF-only
-(Ollama keeps a stray `\r` from a CRLF checkout, which silently changes what the model sees vs. training —
-`.gitattributes` pins `ollama/Modelfile` to LF for this reason). If you change `modelfile.py`'s `TEMPLATE` or the
-training data's message format, both sides of that agreement need to move together.
+- The training data has no system message (tested in `tests/test_evaluation.py`): Qwen's chat template fills in its
+  own default line at training time. The `unsloth-lora` skill records that rendered line in `run.json`, and the
+  `ollama-model` skill bakes it into the Modelfile's `SYSTEM`. Changing the data's message format changes this.
+- `eval/eval.jsonl` comes from the single ledger `EVAL_LEDGER_SEED` (`src/bql_lora/evaluation.py`), which is not one
+  of the training ledgers, and leaves out questions that are in `data/`. Regenerate it after regenerating `data/`, or
+  the held-out test fails. The check `same_rows` regenerates that ledger and compares rows, so a change to
+  `ledger.py` that changes what a seed produces needs a regenerated eval set too.
 
 ## Workflow: PRs, not direct commits
 

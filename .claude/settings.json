@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "llm-finetune-skills": {
+      "source": {
+        "source": "github",
+        "repo": "tarioch/llm-finetune-skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "llm-finetune@llm-finetune-skills": true
+  }
+}
