@@ -240,7 +240,8 @@ CONCEPTS: list[dict] = [
         "How do I write dates in BQL?", "Why does comparing a date to a quoted string fail in BQL?", "How do I filter by a date range in BQL?"],
         answer=("Date literals are written without quotes, as `2024-03-31`. Comparing a date column with a quoted string fails with an operator error (`greater(date, str)` "
                 "not supported). Combine comparisons with AND, or use `BETWEEN` (inclusive on both ends). The `year`, `month` and `day` columns exist on postings and entries; "
-                "on other tables use `year(date)`, `month(date)`. `today()`, `date_add(d, days)` and `date_diff(d1, d2)` handle relative dates.\n\n"
+                "on other tables use `year(date)`, `month(date)`. `today()`, `date_add(d, days)` and `date_diff(d1, d2)` handle relative dates; for months or years "
+                "subtract an interval: `today() - interval('3 months')` (`date_add` only counts days, so `date_add(today(), -3)` is three days ago).\n\n"
                 "```sql\nSELECT date, narration, position\nWHERE date >= 2024-03-01 AND date < 2024-04-01\n```")),
     dict(topic="having", questions=[
         "How does HAVING work in BQL?", "Why can't I use an alias in HAVING?", "How do I filter groups after aggregation in BQL?"],

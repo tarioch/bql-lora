@@ -18,7 +18,7 @@ from .bqlfmt import cond, q, select
 from .executor import Executor, QueryError
 from .ledger import Ledger
 from .nl import (Period, human_list, natural_name, p_after, p_asof, p_before, p_between, p_last_days, p_last_month,
-                 p_last_year, p_month, p_quarter, p_since, p_this_month, p_this_year, p_year, pick, polish)
+                 p_last_months, p_last_weeks, p_last_year, p_month, p_quarter, p_since, p_this_month, p_this_year, p_year, pick, polish)
 
 
 @dataclass
@@ -111,7 +111,7 @@ class Gen:
 
     def period(self, kinds: list[str] | None = None) -> Period:
         rng = self.rng
-        weights = {"month": 26, "year": 18, "quarter": 9, "range": 12, "since": 5, "before": 3, "last_days": 8, "relative": 10}
+        weights = {"month": 26, "year": 18, "quarter": 9, "range": 12, "since": 5, "before": 3, "last_days": 8, "last_months": 8, "relative": 10}
         if kinds:
             weights = {k: v for k, v in weights.items() if k in kinds}
         kind = rng.choices(list(weights), weights=list(weights.values()))[0]
@@ -132,6 +132,10 @@ class Gen:
             return p_before(self.date_in_span(30))
         if kind == "last_days":
             return p_last_days(rng.choice([7, 14, 30, 45, 60, 90, 180]))
+        if kind == "last_months":
+            if rng.random() < 0.2:
+                return p_last_weeks(rng.choice([2, 3, 4, 6, 8]))
+            return p_last_months(rng.choice([1, 2, 3, 3, 6, 6, 12]))
         return rng.choice([p_this_year(), p_last_year(), p_this_month(), p_last_month()])
 
     # ------------------------------------------------------------ selections
@@ -1247,6 +1251,78 @@ def last_activity(g: Gen) -> Sample:
                          f"Show still-open {noun} accounts whose last posting is before {cutoff.isoformat()}")
         expl = "HAVING filters on the per-account aggregate, so only open accounts whose most recent posting is older than the cutoff are listed."
     return Sample("last_activity", question, bql, expl)
+
+
+@intent(3)
+def last_entry_window(g: Gen) -> Sample:
+    """Last entry per account among accounts used in a recent window (this year, the last 12 months, ...) whose most
+    recent entry is nevertheless older than a relative cutoff ("but older than 2 months"). Added by hand after the
+    model got this question wrong. WHERE restricts the rows to the window, so only accounts with an entry in it are
+    grouped at all; HAVING then keeps the ones whose latest entry in that window is before the cutoff."""
+    rng = g.rng
+    roots, noun = rng.choice([
+        ("(Assets|Liabilities)", rng.choice(["asset and liability", "asset or liability"])),
+        ("(Assets|Liabilities)", "balance sheet"),
+        ("Assets", "asset"),
+        ("Liabilities", "liability"),
+        ("Expenses", "expense"),
+    ])
+    first_root = roots.strip("()").split("|")[0]
+    if not g.accounts_of(first_root):
+        raise Skip
+    window_nl, window = rng.choice([
+        (pick(rng, ["this year", "in the current year", "so far this year"]), rng.choice(["year = year(today())", "date >= date_trunc('year', today())"])),
+        (pick(rng, ["in the last 12 months", "in the past year"]), "date >= today() - interval('1 year')"),
+        ("in the last 6 months", "date >= today() - interval('6 months')"),
+    ])
+    open_only = rng.random() < 0.25
+    where = [f"account ~ '^{roots}'", window] + (["close_date(account) IS NULL"] if open_only else [])
+
+    # Pick the cutoff from the data, so that at least one account qualifies (and not just because nothing is recent).
+    lasts = [row[1] for row in g.run(select(["account", "max(date)"], where=where)).rows]
+    if not lasts:
+        raise Skip
+    unit = rng.choice(["months", "months", "months", "weeks", "days"])
+    options = {"months": [1, 2, 3, 4], "weeks": [2, 3, 4, 6, 8], "days": [30, 45, 60, 90]}[unit]
+    rng.shuffle(options)
+
+    def cutoff_of(n: int) -> tuple[str, dt.date]:
+        if unit == "months":
+            return f"today() - interval('{n} month{'s' if n > 1 else ''}')", g.today - dt.timedelta(days=30 * n)
+        # interval() has no weeks, so a week count becomes days
+        days = n * 7 if unit == "weeks" else n
+        return f"today() - interval('{days} days')", g.today - dt.timedelta(days=days)
+
+    for n in options:
+        expr, approx = cutoff_of(n)
+        if any(d < approx - dt.timedelta(days=3) for d in lasts):
+            break
+    else:
+        raise Skip
+    # span: "older than <span>", "<span> ago"; recent: "in the last <recent>"
+    if (unit, n) == ("months", 1):
+        span, recent = "a month", "month"
+    else:
+        span = f"{n} {unit}"
+        if rng.random() < 0.3:
+            span = {"2 months": "two months", "3 months": "three months", "2 weeks": "two weeks"}.get(span, span)
+        recent = span
+
+    order = rng.choice([["last_entry"], ["last_entry"], ["account"]])
+    bql = select(["account", "max(date) AS last_entry"], where=where, group="account", having=f"max(date) < {expr}", order=order)
+    acc = f"{'open ' if open_only else ''}{noun} account"
+    question = g.ask(
+        f"What's the last entry for each {acc} that did have an entry {window_nl}, but older than {span}",
+        f"Show the last entry date of every {acc} that was used {window_nl} but not in the last {recent}",
+        f"Which {acc}s had transactions {window_nl} but none in the past {recent}?",
+        f"For each {acc} with activity {window_nl}, show its latest entry if that is more than {span} ago",
+        f"List the {acc}s whose most recent posting {window_nl} is older than {span}",
+        f"Last posting per {acc} for accounts active {window_nl} that have been quiet for the last {recent}",
+    )
+    expl = (f"WHERE keeps only postings {window_nl}, so only accounts with an entry in that window are grouped; "
+            f"HAVING max(date) < {expr} then keeps those whose latest entry is older than {span}"
+            + (" (close_date(account) IS NULL leaves out closed accounts)." if open_only else "."))
+    return Sample("last_entry_window", question, bql, expl)
 
 
 @intent(3)
