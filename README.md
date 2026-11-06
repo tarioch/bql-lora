@@ -175,30 +175,20 @@ offer the plugin when this repo is opened; elsewhere install it with
 `/plugin marketplace add tarioch/llm-finetune-skills` and `/plugin install llm-finetune@llm-finetune-skills`. Then ask
 Claude, for example, to train the 3B model on `data/` and compare it with the published one.
 
-The commands the skills run, with `<unsloth-lora>` and `<ollama-model>` the skill folders. Training and export use the
-Python of the Unsloth environment (it doesn't need `beancount`), the evaluation uses this repo's (`uv run`), because
-the check executes the queries:
+What the skills need to know about this repo:
 
-```bash
-python <unsloth-lora>/scripts/check_data.py data --eval eval/eval.jsonl
-python <unsloth-lora>/scripts/preflight.py --need-gib 8 --out outputs/bql-3b
-python <unsloth-lora>/scripts/train.py --model unsloth/qwen2.5-coder-3b-instruct-bnb-4bit --data data --out outputs/bql-3b
-python <unsloth-lora>/scripts/export_gguf.py --run outputs/bql-3b
-python <ollama-model>/scripts/modelfile.py --run outputs/bql-3b
-ollama create bql:3b -f outputs/bql-3b/Modelfile
-uv run python <ollama-model>/scripts/evaluate.py --eval eval/eval.jsonl --check scripts/eval_check.py:same_rows \
-    --model bql:3b --model tarioch/qwen2.5-coder-bql:3b --out outputs/bql-3b/eval.jsonl
-```
+- the data is `data/`, the evaluation set `eval/eval.jsonl`,
+- the evaluation check is `scripts/eval_check.py:same_rows` (the `ollama-model` skill's `--check`). It executes the
+  queries with beanquery, so run the evaluation with this repo's environment (`uv run`),
+- the base models are below, trained with the skill's defaults, which are the settings the published models were
+  trained with.
 
-The skills' training defaults are the settings the published models were trained with: LoRA rank 32 on all attention
-and MLP projections, learning rate 2e-4, effective batch 16 (4 x 4), 8-bit AdamW, sequence length 1024, 2 epochs, loss
-only on the answer. On a 12 GB RTX 4070 Ti the 3B model peaks at about 6.5 GiB and trains in about 40 minutes, the
-7B model peaks at about 7.5 GiB and takes about 30 minutes.
+On a 12 GB RTX 4070 Ti the 3B model peaks at about 6.5 GiB and trains in about 40 minutes, the 7B model peaks at
+about 7.5 GiB and takes about 30 minutes.
 
 The published model is [`tarioch/qwen2.5-coder-bql`](https://ollama.com/tarioch/qwen2.5-coder-bql): `:7b` from
 `unsloth/qwen2.5-coder-7b-instruct-bnb-4bit`, `:3b` (also `:latest`) from `unsloth/qwen2.5-coder-3b-instruct-bnb-4bit`.
-Publish a GitHub release of this repo whenever a newly trained model is pushed, with the base model, the data
-checksums and the losses from `run.json` and the evaluation result, so a model can be traced back to its data.
+Publish a GitHub release of this repo whenever a newly trained model is pushed.
 
 ## Using the fine-tuned model
 
