@@ -12,12 +12,14 @@ sampled from another language model: every example is checked against the real i
 
 | Task | Prompt (`user` turn) | Answer |
 | --- | --- | --- |
-| **text2bql** (~6,000 examples) | just the question, e.g. `How much did I spend on groceries in 2024?` | a `sql` block: `SELECT sum(position) WHERE account ~ 'Groceries' AND year = 2024` |
+| **text2bql** (~6,000 examples) | just the question, e.g. `How much did I spend on groceries in 2024?` | only a `sql` block, no explanation (the app takes the query out of the answer): `SELECT sum(position) WHERE account ~ 'Groceries' AND year = 2024` |
 | **reference** (~280 examples) | `What does date_trunc do in BQL?`, `What columns does the postings table have?`, `Why can't I GROUP BY tags?`, ... | short explanation, with an executable example where useful |
 
 Consequences of "must not depend on the ledger":
 
-- Questions that name an account, payee, tag or currency get exactly that in the query. Questions that use a
+- Questions that name an account, tag or currency get exactly that in the query. A payee in the question is usually part
+  of the real name (the model never sees the ledger's payees), so most payee conditions match its first word
+  (`payee ~ 'Umbrella'`) and only some use the whole value. Questions that use a
   natural word ("groceries", "checking") are answered with a **keyword regex** (`account ~ 'Groceries'`) that works
   whatever the account hierarchy is (`Expenses:Groceries` or `Expenses:Food:Groceries`). The generator only emits an
   alias when the keyword matches that one account in the ledger.
@@ -150,7 +152,7 @@ the `ollama-model` skill bakes it into the Modelfile.
 
 ## Evaluation
 
-[`eval/eval.jsonl`](eval/eval.jsonl) holds about 130 text2bql questions in the training format, all drawn from one
+[`eval/eval.jsonl`](eval/eval.jsonl) holds about 500 text2bql questions in the training format, all drawn from one
 synthetic ledger that no training example comes from (`EVAL_LEDGER_SEED` in
 [`evaluation.py`](src/bql_lora/evaluation.py)), with questions that also appear in `data/` left out. An answer is
 right when its `sql` block runs on that ledger and returns the same rows as the expected statement: column names
