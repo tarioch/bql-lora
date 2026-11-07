@@ -163,7 +163,13 @@ query, which an exact text match would not.
 uv run python scripts/generate_eval.py --data data --out eval/eval.jsonl   # after regenerating data/
 ```
 
-`tests/test_evaluation.py` checks that the set is held out and that every expected answer passes the check.
+The check returns two scores. `strict` is the headline: the answer must return exactly the expected columns and rows.
+`loose` asks whether the answer is usable: extra columns, another column order, one row per posting instead of per
+transaction and `yearmonth(date)` instead of `year, month` are accepted, rows are compared as sets and in order only for
+a top-N question (`LIMIT`); a wrong filter, a missing column or a wrong value is still wrong. The `ollama-model` skill's
+report has a column for each.
+
+`tests/test_evaluation.py` checks that the set is held out and that every expected answer passes both scores.
 
 ## Training and publishing
 
