@@ -180,8 +180,8 @@ What the skills need to know about this repo:
 - the base models are below, trained with the skill's defaults, which are the settings the published models were
   trained with.
 
-On a 12 GB RTX 4070 Ti the 3B model peaks at about 6.5 GiB and trains in about 40 minutes, the 7B model peaks at
-about 7.5 GiB and takes about 30 minutes.
+On a 12 GB RTX 4070 Ti the 3B model peaks at about 6.6 GiB and trains in about 35 minutes, the 7B model peaks at
+about 8.1 GiB and takes about 30 minutes. The GGUF export takes a few minutes for 3B and more than 10 for 7B.
 
 The published model is [`tarioch/qwen2.5-coder-bql`](https://ollama.com/tarioch/qwen2.5-coder-bql): `:7b` from
 `unsloth/qwen2.5-coder-7b-instruct-bnb-4bit`, `:3b` (also `:latest`) from `unsloth/qwen2.5-coder-3b-instruct-bnb-4bit`.
