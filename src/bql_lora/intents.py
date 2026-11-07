@@ -245,6 +245,18 @@ class Gen:
             raise Skip
         return self.rng.choice(pool)
 
+    def payee_ref(self, payee: str | None = None) -> tuple[str, str]:
+        """(name as the question writes it, condition) for a payee.
+
+        The model sees only the question, never the ledger's payees, so a name in the question is usually a
+        part of the real payee: most conditions match its first word with ``~`` and only some use the exact value.
+        """
+        full = payee or self.payee()
+        word = full.split()[0].strip(".,'&")
+        if len(word) < 4 or self.rng.random() < 0.3:
+            return full, f"payee = {q(full)}"
+        return word, f"payee ~ {q(word)}"
+
     def tag(self) -> str:
         if not self.led.tags:
             raise Skip
@@ -658,10 +670,8 @@ def recent_transactions(g: Gen) -> Sample:
         )
         expl = "Filters postings to one account and sorts newest first."
     else:
-        p = g.payee()
-        bql = select(
-            ["date", "narration"], frm="#transactions", where=[f"payee = {q(p)}"], order=["date DESC"], limit=n
-        )
+        p, pcond = g.payee_ref()
+        bql = select(["date", "narration"], frm="#transactions", where=[pcond], order=["date DESC"], limit=n)
         question = g.ask(
             f"Show the last {n} transactions with {p}", f"What are the {n} latest transactions where the payee is {p}?"
         )
@@ -672,7 +682,7 @@ def recent_transactions(g: Gen) -> Sample:
 @intent(5)
 def txns_by_payee(g: Gen) -> Sample:
     rng = g.rng
-    p = g.payee()
+    p, pcond = g.payee_ref()
     period = g.period() if rng.random() < 0.4 else None
     variant = rng.choice(["eq", "eq", "regex", "total", "count"])
     table = "#transactions" if variant in ("eq", "regex") else None
@@ -683,7 +693,7 @@ def txns_by_payee(g: Gen) -> Sample:
             frm = None
     per = f" {period.phrase(rng)}" if period else ""
     if variant == "eq":
-        where.append(f"payee = {q(p)}")
+        where.append(pcond)
         cols = ["date", "narration"] + ([] if table else ["account", "position"])
         bql = select(cols, frm=table or frm, where=where, order=["date"])
         question = g.ask(
@@ -701,7 +711,7 @@ def txns_by_payee(g: Gen) -> Sample:
         )
         expl = "The ~ operator matches a regular expression anywhere in the string."
     elif variant == "total":
-        where += [f"payee = {q(p)}", "account ~ '^Expenses'"]
+        where += [pcond, "account ~ '^Expenses'"]
         bql = select("sum(position)", frm=frm, where=where)
         question = g.ask(
             f"How much did I spend at {p}{per}?",
@@ -710,7 +720,7 @@ def txns_by_payee(g: Gen) -> Sample:
         )
         expl = "Sums the Expenses postings of transactions whose payee is that value."
     else:
-        where += [f"payee = {q(p)}"]
+        where += [pcond]
         bql = (
             select(
                 "count(*)",
@@ -718,7 +728,7 @@ def txns_by_payee(g: Gen) -> Sample:
                 where=[w for w in where if "year =" not in w and "month =" not in w] if False else where,
             )
             if table is not None
-            else select("count(*)", frm="#transactions", where=[f"payee = {q(p)}"])
+            else select("count(*)", frm="#transactions", where=[pcond])
         )
         question = g.ask(
             f"How many transactions do I have with {p}?",
@@ -1002,21 +1012,14 @@ def distinct_lists(g: Gen) -> Sample:
         expl = "Distinct payees on postings of the selected accounts."
     else:
         t = rng.choice(g.led.txns)
-        bql = (
-            select(
-                "narration",
-                distinct=True,
-                frm="#transactions",
-                where=["payee IS NOT NULL", f"payee = {q(t.payee)}" if t.payee else "flag = '*'"],
-                order=["narration"],
-            )
-            if t.payee
-            else None
-        )
-        if not bql:
+        if not t.payee:
             raise Skip
+        name, pcond = g.payee_ref(t.payee)
+        bql = select(
+            "narration", distinct=True, frm="#transactions", where=["payee IS NOT NULL", pcond], order=["narration"]
+        )
         question = g.ask(
-            f"What different descriptions have I used for {t.payee}?", f"Distinct narrations for payee {t.payee}"
+            f"What different descriptions have I used for {name}?", f"Distinct narrations for payee {name}"
         )
         expl = "Distinct narration strings of the payee's transactions."
     return Sample("distinct_lists", question, bql, expl)
@@ -1153,6 +1156,8 @@ def prices_table(g: Gen) -> Sample:
             f"What is the latest price of {cur}?",
             f"Most recent price entry for {cur}",
             f"When was {cur} last priced and at what value?",
+            f"What is the newest price I have for {cur}?",
+            f"Latest {cur} price and the date it was set",
         )
         expl = "The #prices table holds price directives; sort by date and keep the latest."
     elif variant == "history":
@@ -1280,6 +1285,8 @@ def stale_accounts(g: Gen) -> Sample:
         question = g.ask(
             "Which open asset or liability accounts have never had a balance assertion?",
             "List open Assets/Liabilities accounts with no balance check at all",
+            "Which open asset and liability accounts have no balance assertion?",
+            "Open Assets and Liabilities accounts that were never checked with a balance directive",
         )
         expl = "account NOT IN (SELECT account FROM #balances) finds accounts that never appear in the balances table."
     return Sample("stale_accounts", question, bql, expl, allow_empty=True)
@@ -1388,7 +1395,10 @@ def holdings(g: Gen) -> Sample:
             order=["account"],
         )
         question = g.ask(
-            "What is the cost basis of each investment account?", "How much did I pay for my holdings, per account?"
+            "What is the cost basis of each investment account?",
+            "How much did I pay for my holdings, per account?",
+            "Cost basis per account",
+            "What did my investments cost me, by account?",
         )
         expl = "cost() converts positions to their cost basis."
     elif variant == "market":
@@ -1878,10 +1888,8 @@ def first_last(g: Gen) -> Sample:
         )
         expl = "Aggregates over the postings of one account."
     elif variant == "payee_first":
-        p = g.payee()
-        bql = select(
-            ["min(date) AS first_paid", "max(date) AS last_paid"], frm="#transactions", where=[f"payee = {q(p)}"]
-        )
+        p, pcond = g.payee_ref()
+        bql = select(["min(date) AS first_paid", "max(date) AS last_paid"], frm="#transactions", where=[pcond])
         question = g.ask(f"When did I first and last transact with {p}?", f"First and most recent date for {p}")
         expl = "min/max of the date over that payee's transactions."
     else:
@@ -2125,12 +2133,11 @@ def or_conditions(g: Gen) -> Sample:
         raise Skip
     variant = rng.choice(["payees", "payee_in", "excl"])
     if variant == "payees":
+        (n1, c1), (n2, c2) = g.payee_ref(p1), g.payee_ref(p2)
         bql = select(
-            ["date", "payee", "narration", "position"],
-            where=[f"payee = {q(p1)} OR payee = {q(p2)}", "account ~ '^Expenses'"],
-            order=["date"],
+            ["date", "payee", "narration", "position"], where=[f"{c1} OR {c2}", "account ~ '^Expenses'"], order=["date"]
         )
-        question = g.ask(f"Show expenses paid to {p1} or {p2}", f"Expense postings from either {p1} or {p2}")
+        question = g.ask(f"Show expenses paid to {n1} or {n2}", f"Expense postings from either {n1} or {n2}")
     elif variant == "payee_in":
         bql = select(
             ["date", "payee", "narration", "position"],
@@ -2161,8 +2168,8 @@ def print_statement(g: Gen) -> Sample:
     rng = g.rng
     variant = rng.choice(["payee", "tag", "narration", "account", "date", "link"])
     if variant == "payee":
-        p = g.payee()
-        bql = f"PRINT FROM payee = {q(p)}"
+        p, pcond = g.payee_ref()
+        bql = f"PRINT FROM {pcond}"
         question = g.ask(f"Print the raw Beancount entries for payee {p}", f"Show {p} transactions in Beancount syntax")
     elif variant == "tag":
         t = g.tag()

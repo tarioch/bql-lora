@@ -8,17 +8,10 @@ from .intents import Sample
 from .ledger import Ledger
 from .schema import user_prompt
 
-ANSWER_STYLES = ["code_then_explain", "code_then_explain", "code_only", "explain_then_code", "code_then_explain"]
-
 
 def assistant_message(rng: random.Random, sample: Sample) -> str:
-    style = rng.choice(ANSWER_STYLES) if sample.explanation else "code_only"
-    code = f"```sql\n{sample.bql}\n```"
-    if style == "code_only":
-        return code
-    if style == "explain_then_code":
-        return f"{sample.explanation}\n\n{code}"
-    return f"{code}\n\n{sample.explanation}"
+    """Just the fenced query: the app runs it and has no use for an explanation, which is also less to learn."""
+    return f"```sql\n{sample.bql}\n```"
 
 
 def build_example(rng: random.Random, ledger: Ledger, sample: Sample, mode: str = "full") -> dict:
