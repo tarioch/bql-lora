@@ -264,9 +264,16 @@ def polish(rng: random.Random, text: str) -> str:
     r = rng.random()
     text = re.sub(r"\s+", " ", text).strip()
     if r < 0.10:
-        text = text[0].lower() + text[1:]
+        text = re.sub(r"\bI\b", "i", text[0].lower() + text[1:]) if rng.random() < 0.5 else text[0].lower() + text[1:]
     if rng.random() < 0.25:
         text = text.rstrip("?.!")
+    r = rng.random()
+    if r < 0.04:
+        text = f"{text.rstrip('?.!')} please"
+    elif r < 0.07:
+        text = f"hey, {text[0].lower() + text[1:]}"
+    elif r < 0.09:
+        text = f"quick question: {text[0].lower() + text[1:]}"
     return text
 
 

@@ -40,7 +40,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--data", type=Path, default=Path("data"), help="the training data, to leave its questions out")
     ap.add_argument("--out", type=Path, default=Path("eval/eval.jsonl"))
-    ap.add_argument("--examples", type=int, default=200, help="examples to generate before dropping training ones")
+    ap.add_argument("--examples", type=int, default=700, help="examples to generate before dropping training ones")
     ap.add_argument("--training-seed", type=int, default=1, help="generate_dataset.py's --seed for data/")
     ap.add_argument("--training-ledgers", type=int, default=350, help="generate_dataset.py's --ledgers for data/")
     args = ap.parse_args()
