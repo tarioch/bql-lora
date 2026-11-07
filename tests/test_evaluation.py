@@ -55,6 +55,14 @@ def test_row_order_counts_only_with_order_by():
     assert same_rows([], unordered, desc)
 
 
+def test_a_string_where_an_amount_is_expected_is_wrong_not_an_error():
+    # Amount.__eq__ raises AttributeError for a string, which crashed the check instead of scoring the answer
+    expected = "```sql\nSELECT date, currency, amount FROM #prices ORDER BY date DESC LIMIT 1\n```"
+    answer = "```sql\nSELECT date, currency, currency FROM #prices ORDER BY date DESC LIMIT 1\n```"
+    assert not same_rows([], expected, answer)
+    assert same_rows([], expected, expected)
+
+
 def test_extract_sql_takes_the_first_block():
     assert extract_sql("text\n```sql\nSELECT 1\n```\nmore\n```sql\nSELECT 2\n```") == "SELECT 1"
     assert extract_sql("no block") is None

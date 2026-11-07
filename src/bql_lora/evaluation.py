@@ -51,6 +51,9 @@ def same_rows(prompt: list[dict], expected: str, answer: str) -> bool:
         raise ValueError(f"the expected statement does not run: {expected_sql!r}")
     if got is None:
         return False
+    # compare the printed values: Amount and Position raise instead of returning False when an answer has a string
+    # where they are expected
+    got_text, want_text = list(map(repr, got)), list(map(repr, want))
     if re.search(r"\bORDER\s+BY\b", expected_sql, re.IGNORECASE):
-        return got == want
-    return sorted(map(repr, got)) == sorted(map(repr, want))
+        return got_text == want_text
+    return sorted(got_text) == sorted(want_text)
