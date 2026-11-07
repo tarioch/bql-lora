@@ -296,8 +296,8 @@ def agg_report(g: Gen) -> Sample:
     sel = g.selector(root)
     period = g.period() if rng.random() < 0.8 else None
     dim = rng.choices(
-        ["none", "account", "root2", "month", "year", "quarter", "payee", "currency", "weekday", "yearmonth"],
-        weights=[16, 20, 10, 16, 8, 6, 12, 3, 4, 5],
+        ["none", "account", "root2", "month", "year", "quarter", "payee", "currency", "weekday"],
+        weights=[16, 20, 10, 16, 8, 6, 12, 3, 4],
     )[0]
     if dim == "root2" and not any(len(a.split(":")) > 2 for a in sel.accounts):
         dim = "account"
@@ -309,7 +309,7 @@ def agg_report(g: Gen) -> Sample:
         dim = "none" if rng.random() < 0.5 else "currency"
     # Drop time dimensions that are redundant with (or finer-grained than sensible for) the chosen period:
     # e.g. "per year" when already scoped to one quarter, or "by month" when scoped to a single month.
-    if period and period.kind in ("month",) and dim in ("month", "year", "yearmonth"):
+    if period and period.kind in ("month",) and dim in ("month", "year"):
         dim = "none"
     if period and period.kind in ("quarter",) and dim in ("year", "quarter"):
         dim = "none"
@@ -320,7 +320,7 @@ def agg_report(g: Gen) -> Sample:
     frm = None
     if period:
         frm, where = g.use_from(period.form(rng, "postings"), where)
-    if root == "Assets" and dim in ("month", "year", "quarter", "yearmonth", "weekday") and rng.random() < 0.7:
+    if root == "Assets" and dim in ("month", "year", "quarter", "weekday") and rng.random() < 0.7:
         raise Skip  # sums of balance changes per period are unusual for asset accounts
 
     # measure
@@ -350,7 +350,6 @@ def agg_report(g: Gen) -> Sample:
         "account": (["account"], ["account"], "account", "for each account"),
         "root2": (["root(account, 2) AS category"], ["category"], "category", "per top-level category"),
         "month": (["year", "month"], ["year", "month"], "year, month", "per month"),
-        "yearmonth": (["yearmonth(date) AS month"], ["month"], "month", "by month"),
         "year": (["year"], ["year"], "year", "per year"),
         "quarter": (["quarter(date) AS quarter"], ["quarter"], "quarter", "per quarter"),
         "payee": (["payee"], ["payee"], "payee", "by payee"),
@@ -372,7 +371,7 @@ def agg_report(g: Gen) -> Sample:
         if rng.random() < 0.55:
             limit = rng.choice([3, 5, 5, 10])
             ord_nl = ""
-    elif dim in ("month", "year", "quarter", "yearmonth"):
+    elif dim in ("month", "year", "quarter"):
         order = [c.strip() for c in ((grp_names if group else []) or [])]
         if not order:
             order = None
@@ -613,14 +612,7 @@ def top_expenses(g: Gen) -> Sample:
     curf = rng.random() < 0.4
     base_where = [sel.cond] + ([f"currency = '{g.base}'"] if curf else [])
     frm, where = g.use_from(period.form(rng), base_where) if period else (None, base_where)
-    cols = rng.choice(
-        [
-            ["date", "payee", "narration", "position"],
-            ["date", "payee", "narration", "account", "number"],
-            ["date", "description", "position"],
-        ]
-    )
-    bql = select(cols, frm=frm, where=where, order=["number DESC"], limit=n)
+    bql = select(["date", "payee", "narration", "position"], frm=frm, where=where, order=["number DESC"], limit=n)
     per = f" {period.phrase(rng)}" if period else ""
     per += f" (only {g.base} postings)" if curf else ""
     question = g.ask(
@@ -683,7 +675,7 @@ def txns_by_payee(g: Gen) -> Sample:
     p = g.payee()
     period = g.period() if rng.random() < 0.4 else None
     variant = rng.choice(["eq", "eq", "regex", "total", "count"])
-    table = "#transactions" if variant in ("eq", "regex") and rng.random() < 0.5 else None
+    table = "#transactions" if variant in ("eq", "regex") else None
     frm, where = None, []
     if period:
         frm, where = g.use_from(period.form(rng, "transactions" if table else "postings"))
@@ -790,7 +782,7 @@ def txns_by_tag_link(g: Gen) -> Sample:
         t = g.tag()
         bql = select(["date", "payee", "narration", "account", "position"], where=[f"{q(t)} IN tags"], order=["date"])
         question = g.ask(
-            f"Show all postings tagged #{t}", f"List transactions with tag {t}", f"What entries have the tag '{t}'?"
+            f"Show all postings tagged #{t}", f"List the postings with tag {t}", f"What postings have the tag '{t}'?"
         )
         expl = "tags is a set of strings; IN tests membership."
     elif variant == "link":
@@ -1038,16 +1030,29 @@ def distinct_lists(g: Gen) -> Sample:
 def accounts_table(g: Gen) -> Sample:
     rng = g.rng
     variant = rng.choice(
-        ["open", "closed", "opened_year", "list", "open_dates", "opened_by_root", "account_meta", "meta_subscript"]
+        [
+            "open",
+            "open_names",
+            "closed",
+            "opened_year",
+            "list",
+            "open_dates",
+            "opened_by_root",
+            "account_meta",
+            "meta_subscript",
+        ]
     )
     if variant == "open":
         bql = select(["account", "open.date AS opened"], frm="#accounts", where=["close IS NULL"], order=["account"])
         question = g.ask(
             "List all currently open accounts with their opening dates",
-            "Which accounts are still open?",
             "Show open accounts and when they were opened",
         )
         expl = "The #accounts table has open and close directives; close is NULL for accounts still open."
+    elif variant == "open_names":
+        bql = select(["account"], frm="#accounts", where=["close IS NULL"], order=["account"])
+        question = g.ask("Which accounts are still open?", "List the names of all open accounts")
+        expl = "The #accounts table has one row per account; close is NULL for accounts still open."
     elif variant == "closed":
         bql = select(
             ["account", "close.date AS closed"], frm="#accounts", where=["close IS NOT NULL"], order=["closed"]
@@ -1764,7 +1769,8 @@ def date_functions(g: Gen) -> Sample:
             order=["month"],
         )
         question = g.ask(
-            f"For each month, how many postings and what total for {sel.nl}?", f"Monthly count and sum for {sel.nl}"
+            f"For each month (as the first day of the month), how many postings and what total for {sel.nl}?",
+            f"Monthly count and sum for {sel.nl}, with the month as a date",
         )
         expl = "yearmonth() maps each date to the first day of its month."
     else:
