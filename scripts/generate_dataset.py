@@ -93,6 +93,25 @@ def generate_for_ledger(
     return out
 
 
+def split_by_prompt(examples: list[dict], n_val: int) -> tuple[list[dict], list[dict]]:
+    """Validation and training sets, with every example of a prompt on the same side.
+
+    A prompt can occur more than once (the same question with another, equally valid query). If one copy landed in
+    validation and another in training, the validation loss would partly measure recall. Takes whole prompts, in the
+    examples' order, until validation has at least ``n_val`` examples.
+    """
+    groups: dict[str, list[dict]] = {}
+    for example in examples:
+        groups.setdefault(json.dumps(example["messages"][:-1], ensure_ascii=False), []).append(example)
+    val: list[dict] = []
+    train: list[dict] = []
+    for group in groups.values():
+        (val if len(val) < n_val else train).extend(group)
+    order = {id(e): i for i, e in enumerate(examples)}
+    train.sort(key=lambda e: order[id(e)])
+    return val, train
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ledgers", type=int, default=350, help="number of distinct synthetic ledgers to generate")
@@ -145,7 +164,7 @@ def main() -> None:
 
     master_rng.shuffle(examples)
     n_val = max(1, int(len(examples) * args.val_fraction))
-    val, train = examples[:n_val], examples[n_val:]
+    val, train = split_by_prompt(examples, n_val)
 
     def dump(path: Path, rows: list[dict]) -> None:
         with path.open("w", encoding="utf-8") as f:

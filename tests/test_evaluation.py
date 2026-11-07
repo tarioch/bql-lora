@@ -67,3 +67,31 @@ def test_eval_ledger_is_not_a_training_ledger():
     from generate_eval import training_ledger_seeds
 
     assert EVAL_LEDGER_SEED not in training_ledger_seeds(1, 350)
+
+
+def test_validation_prompts_are_not_in_training():
+    # the unsloth-lora skill's check_data.py fails on these: the model has seen the prompt, so its validation
+    # loss there measures recall
+    train = {json.dumps(row["messages"][:-1]) for row in _lines(ROOT / "data" / "train.jsonl")}
+    val = [json.dumps(row["messages"][:-1]) for row in _lines(ROOT / "data" / "val.jsonl")]
+    assert val
+    assert not train & set(val)
+
+
+def test_split_keeps_each_prompt_on_one_side():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("generate_dataset", ROOT / "scripts" / "generate_dataset.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    def ex(q, a):
+        return {"messages": [{"role": "user", "content": q}, {"role": "assistant", "content": a}]}
+
+    examples = [ex("a", "1"), ex("b", "1"), ex("c", "1"), ex("a", "2"), ex("d", "1"), ex("b", "2")]
+    val, train = module.split_by_prompt(examples, 3)
+    assert [e["messages"][0]["content"] for e in val] == ["a", "a", "b", "b"]  # whole prompts, at least 3 examples
+    assert [e["messages"][0]["content"] for e in train] == ["c", "d"]
+    val, train = module.split_by_prompt(examples, 1)
+    assert [e["messages"][0]["content"] for e in val] == ["a", "a"]
+    assert [e["messages"][0]["content"] for e in train] == ["b", "c", "d", "b"]  # training keeps the shuffled order
