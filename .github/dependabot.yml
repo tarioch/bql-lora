@@ -1,3 +1,5 @@
+# Synced from https://github.com/tarioch/repo-sync/blob/main/config/dependabot/bql-lora.yml
+# Do not edit here, the next sync overwrites it. Change it in repo-sync.
 version: 2
 updates:
   # beanquery is a git dependency (see CLAUDE.md) and not covered: `uv lock --upgrade` moves it on purpose
