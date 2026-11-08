@@ -378,11 +378,12 @@ def agg_report(g: Gen) -> Sample:
     order, limit, ord_nl = None, None, ""
     if dim in ("account", "root2", "payee") and rng.random() < 0.55:
         direction = rng.choice(["DESC", "ASC"]) if rng.random() < 0.3 else "DESC"
-        order = [f"{alias or 'total'} {direction}"] if alias else [f"{expr} {direction}"]
-        ord_nl = " with the largest first" if direction == "DESC" else " with the smallest first"
         if rng.random() < 0.55:
             limit = rng.choice([3, 5, 5, 10])
-            ord_nl = ""
+            direction = "DESC"  # "top N" and "the most" mean the largest values
+        order = [f"{alias or 'total'} {direction}"] if alias else [f"{expr} {direction}"]
+        if not limit:
+            ord_nl = " with the largest first" if direction == "DESC" else " with the smallest first"
     elif dim in ("month", "year", "quarter"):
         order = [c.strip() for c in ((grp_names if group else []) or [])]
         if not order:
@@ -852,7 +853,7 @@ def txns_by_flag(g: Gen) -> Sample:
         bql = select(["date", "payee", "narration"], frm="#transactions", where=["flag = '!'"], order=["date"])
         question = g.ask(
             "Which transactions are still pending?",
-            "Show transactions flagged with !",
+            "Show transactions that carry the ! flag",
             "List all transactions marked as pending",
             "Find transactions that need review (flag !)",
         )
@@ -1752,8 +1753,8 @@ def date_functions(g: Gen) -> Sample:
             order=["week_end"],
         )
         question = g.ask(
-            f"Show weekly totals for {sel.nl}, labeled by the last day of each week",
-            f"Weekly {sel.nl} spending, with each week shown by its end date",
+            f"Show weekly totals for {sel.nl}, labeled by the last day of each week, with weeks starting from {origin}",
+            f"Weekly {sel.nl} spending, with each week shown by its end date and the weeks aligned at {origin}",
         )
         expl = (
             "date_bin() buckets by the week's start; adding interval('6 days') shifts the label to the week's last day."
@@ -2187,10 +2188,10 @@ def print_statement(g: Gen) -> Sample:
     elif variant == "account":
         a = rng.choice(g.used)
         bql = f"PRINT FROM {q(a)} IN accounts" + (f" AND year = {rng.choice(g._years)}" if rng.random() < 0.4 else "")
+        in_year = f" in {bql.split('= ')[-1]}" if "year =" in bql else ""
         question = g.ask(
-            f"Print all directives that involve {g.acct_ref(a)}"
-            + (f" in {bql.split('= ')[-1]}" if "year =" in bql else ""),
-            f"Dump the ledger entries touching {a} in Beancount format",
+            f"Print all directives that involve {g.acct_ref(a)}{in_year}",
+            f"Dump the ledger entries touching {a}{in_year} in Beancount format",
         )
     elif variant == "date":
         m = g.ym()
