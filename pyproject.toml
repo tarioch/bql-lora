@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Training data generator for fine-tuning LLMs on the Beancount Query Language (beanquery, Beancount v3)"
 license = "GPL-2.0-only"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
     "beancount >= 3.0",
     "beanquery @ git+https://github.com/beancount/beanquery.git",
